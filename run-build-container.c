@@ -304,11 +304,13 @@ static int do_config(const char *config)
 
 static void usage(const char *argv0)
 {
-	fprintf(stderr, "%s [-n <container>] [-c] [-e <prog>] [-- args...]\n"
+	fprintf(stderr, "%s [-n <container>] [-c] [-L] [-e <prog>] [-- args...]\n"
 		"-n <container> read configuration from "CONTAINER_DIR"/container\n"
-		"               (instead of just unsharing mount namespace)\n"
-		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}\n"
-		"-c             check configuration only, don't run anything\n"
+		"               (instead of just unsharing mount namespace).\n"
+		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
+		"-c             check configuration only, don't run anything.\n"
+		"-L             lock file system inside the container from all\n"
+		"               changes in the outside (parent) namespace, i.e. unmounts.\n"
 		"\n",
 		argv0);
 	exit(1);
@@ -316,24 +318,23 @@ static void usage(const char *argv0)
 
 int main(int argc, char *argv[])
 {
-	char *config = NULL;
+	const char *config = NULL;
 	const char *prog = NULL;
-	int opt;
+	int opt, lock_fs = 0;
 
-	while ((opt = getopt(argc, argv, "n:e:c")) != -1)
+	while ((opt = getopt(argc, argv, "n:e:cL")) != -1)
 		switch (opt) {
 		case 'n':
-			free(config);
-			config = malloc(strlen(optarg) + strlen(CONTAINER_DIR) + 2);
-			strcpy(config, CONTAINER_DIR);
-			strcat(config, "/");
-			strcat(config, optarg);
+			config = optarg;
 			break;
 		case 'e':
 			prog = optarg;
 			break;
 		case 'c':
 			check_config = 1;
+			break;
+		case 'L':
+			lock_fs = 1;
 			break;
 		default:
 			fprintf(stderr, "Invalid command line parameter\n");
@@ -351,12 +352,8 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 	if (unshare(CLONE_NEWNS) == 0) {
-		/*
-		 * Fix mount propagation which systemd has messed with.
-		 * See the Debian bug report for details:
-		 * https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=739593
-		 */
-		if (mount("none", "/", NULL, MS_REC | MS_SLAVE, NULL) != 0) {
+		if (mount("none", "/", NULL,
+			  MS_REC | (lock_fs ? MS_PRIVATE : MS_SLAVE), NULL) != 0) {
 			fprintf(stderr, "%s: setting mount propagation: %s\n",
 				argv[0], strerror(errno));
 			exit(2);
