@@ -10,8 +10,11 @@
 #include <grp.h>
 #include <getopt.h>
 
-#ifndef CONTAINER_DIR
-#define CONTAINER_DIR "/etc/build-container"
+#ifndef BUILD_CONTAINER_PATH
+#define BUILD_CONTAINER_PATH "BUILD_CONTAINER_PATH"
+#endif
+#ifndef CONTAINER_PATH
+#define CONTAINER_PATH "~/.config/build-container:/etc/build-container"
 #endif
 
 static int check_config;
@@ -200,9 +203,63 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 	return 0;
 }
 
+static FILE *open_config_file(const char *config)
+{
+	static char dot[] = ".";
+	FILE *fp;
+	char *dirs = getenv(BUILD_CONTAINER_PATH);
+	char *p;
+
+	if (dirs)
+		/* Necessary: protecting environment
+		   for subsequent users of the variable. */
+		dirs = strdup(dirs);
+	else
+		dirs = strdup(CONTAINER_PATH);
+	if (!*dirs) {
+		free(dirs);
+		fprintf(stderr, "No defined path for configuration file %s\n", config);
+		errno = EINVAL;
+		return NULL;
+	}
+	char *end = dirs + strlen(dirs) + 1;
+	for (p = dirs; p < end;) {
+		char *file, *next;
+		size_t n = strcspn(p, ":");
+		next = p + n + 1;
+		if (!n) {
+			p = dot;
+			n = 1;
+		}
+		if (p[0] == '~' && (p[1] == '/' || p[1] == ':' || !p[1])) {
+			const char *home = getenv("HOME");
+			if (!home)
+				home = dot + 1;
+			file = malloc(strlen(home) + n + strlen(config) + 2);
+			strcpy(file, home);
+			memcpy(file + strlen(file), p + 1, n - 1);
+			file[strlen(file) + n - 1] = '\0';
+		} else {
+			file = malloc(n + strlen(config) + 2);
+			memcpy(file, p, n);
+			file[n] = '\0';
+		}
+		strcat(file, "/");
+		strcat(file, config);
+		if (check_config)
+			printf("# config file '%s'\n", file);
+		fp = fopen(file, "r");
+		if (fp)
+			break;
+		p = next;
+	}
+	free(dirs);
+	return fp;
+}
+
 static int do_config(const char *config)
 {
-	FILE *fp = fopen(config, "r");
+	FILE *fp = open_config_file(config);
 	char line[BUFSIZ];
 	struct stk *head = NULL, *a, *b;
 	int ret = 0;
@@ -305,7 +362,7 @@ static int do_config(const char *config)
 static void usage(const char *argv0)
 {
 	fprintf(stderr, "%s [-n <container>] [-c] [-L] [-e <prog>] [-- args...]\n"
-		"-n <container> read configuration from "CONTAINER_DIR"/container\n"
+		"-n <container> read configuration from {"CONTAINER_PATH"}/container\n"
 		"               (instead of just unsharing mount namespace).\n"
 		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
 		"-c             check configuration only, don't run anything.\n"
