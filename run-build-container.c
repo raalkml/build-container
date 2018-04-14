@@ -359,9 +359,10 @@ static int do_config(const char *config)
 	return ret;
 }
 
-static void usage(const char *argv0)
+static void usage(const char *argv0, int code)
 {
-	fprintf(stderr, "%s [-n <container>] [-c] [-L] [-e <prog>] [-- args...]\n"
+	fprintf(stderr, "%s [-hcL] [-n <container>] [-e <prog>] [-- args...]\n"
+		"-h             show this text\n"
 		"-n <container> read configuration from {"CONTAINER_PATH"}/container\n"
 		"               (instead of just unsharing mount namespace).\n"
 		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
@@ -370,7 +371,7 @@ static void usage(const char *argv0)
 		"               changes in the outside (parent) namespace, i.e. unmounts.\n"
 		"\n",
 		argv0);
-	exit(1);
+	exit(code);
 }
 
 int main(int argc, char *argv[])
@@ -379,8 +380,11 @@ int main(int argc, char *argv[])
 	const char *prog = NULL;
 	int opt, lock_fs = 0;
 
-	while ((opt = getopt(argc, argv, "n:e:cL")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cL")) != -1)
 		switch (opt) {
+		case 'h':
+			usage(argv[0], 0);
+			break;
 		case 'n':
 			config = optarg;
 			break;
@@ -395,7 +399,7 @@ int main(int argc, char *argv[])
 			break;
 		default:
 			fprintf(stderr, "Invalid command line parameter\n");
-			usage(argv[0]);
+			usage(argv[0], 1);
 		}
 	if (!prog)
 		prog = getenv("SHELL");
