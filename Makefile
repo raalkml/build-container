@@ -4,5 +4,10 @@ run-build-container: run-build-container.c
 
 .PHONY: test
 test:
-	sudo env PATH="$$PATH" ./run-build-container -n example \
-	    -e /bin/sh -- -c 'ls -l --color mnt*; cat mnt3/file'
+	BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -c
+	BUILD_CONTAINER_PATH= ./run-build-container -n example -c || true
+	BUILD_CONTAINER_PATH=: ./run-build-container -n NONE -c |grep config.file
+	BUILD_CONTAINER_PATH=~ ./run-build-container -n NONE -c |grep config.file
+	BUILD_CONTAINER_PATH=/etc/:~ ./run-build-container -n NONE -c |grep config.file
+	BUILD_CONTAINER_PATH=/usr/etc:~/.config ./run-build-container -n NONE -c |grep config.file
+	BUILD_CONTAINER_PATH=~/.config:/etc ./run-build-container -n NONE -c |grep config.file
