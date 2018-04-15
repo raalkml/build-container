@@ -25,13 +25,16 @@ t/sudo-test.conf:
 	echo 'from /bin'; \
 	echo 'to $(@D)/bin'; \
 	echo 'union'; \
+	echo 'from $(@D)/bin'; \
+	echo 'to /bin'; \
+	echo 'move'; \
 	echo 'from $(abspath .)'; \
 	echo 'to /usr/src'; \
 	echo 'bind'
 
 sudo-test: t/sudo-test.conf
 	BUILD_CONTAINER_PATH=$(abspath $(<D)) ./run-build-container -n $(<F) -c
-	sudo env BUILD_CONTAINER_PATH=$(abspath $(<D)) PATH=$(<D)/bin \
+	sudo env BUILD_CONTAINER_PATH=$(abspath $(<D)) \
 	    ./run-build-container -n $(<F) -e gzip | grep Not.a.gzip
 	sudo env BUILD_CONTAINER_PATH=$(abspath $(<D)) \
 	    ./run-build-container -n $(<F) -e ls -- /usr/src |grep run-build-container
