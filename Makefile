@@ -45,7 +45,7 @@ t/sudo-test2.conf:
 	exec >$@; \
 	echo 'from $(@D)/mnt/gzip'; \
 	echo 'to /bin/gzip'; \
-	echo 'bind'; \
+	echo 'bind'
 	BUILD_CONTAINER_PATH=$(abspath $(@D)) ./run-build-container -n $(@F) -c
 	sudo env BUILD_CONTAINER_PATH=$(abspath $(@D)) \
 	    ./run-build-container -n $(@F) -e gzip | grep Not.a.gzip
