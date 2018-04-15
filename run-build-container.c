@@ -1,3 +1,4 @@
+#include <stdarg.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,8 +18,19 @@
 #define CONTAINER_PATH "~/.config/build-container:/etc/build-container"
 #endif
 
+static const char build_container[] = "build-container";
 static int check_config;
 static int verbose = 1;
+
+static void error(const char *fmt, ...)
+{
+	va_list args;
+	va_start(args, fmt);
+	fputs(build_container, stderr);
+	fputs(": ", stderr);
+	vfprintf(stderr, fmt, args);
+	va_end(args);
+}
 
 static int drop_sudo_privileges(const char *sudo_user)
 {
@@ -30,8 +42,8 @@ static int drop_sudo_privileges(const char *sudo_user)
 	pw = getpwnam(sudo_user);
 
 	if (!pw) {
-		fprintf(stderr, "SUDO_USER=\"%s\": %s\n", sudo_user,
-			errno ? strerror(errno): "user not found");
+		error("SUDO_USER=\"%s\": %s\n", sudo_user,
+		      errno ? strerror(errno): "user not found");
 		return -1;
 	}
 	for (;;) {
@@ -43,16 +55,16 @@ static int drop_sudo_privileges(const char *sudo_user)
 			break;
 	}
 	if (setregid(pw->pw_gid, pw->pw_gid) < 0) {
-		perror("SUDO_USER (gid)");
+		error("SUDO_USER (gid): %s\n", strerror(errno));
 		return -1;
 	}
 	if (setgroups(ngroups, groups) < 0) {
-		perror("SUDO_USER (groups)");
+		error("SUDO_USER (groups): %s\n", strerror(errno));
 		return -1;
 	}
 	free(groups);
 	if (setreuid(pw->pw_uid, pw->pw_uid) < 0) {
-		perror("SUDO_USER (uid)");
+		error("SUDO_USER (uid): %s\n", strerror(errno));
 		return -1;
 	}
 	setenv("USER", sudo_user, 1);
@@ -70,7 +82,7 @@ static int drop_privileges(void)
 	if (sudo_user)
 		return drop_sudo_privileges(sudo_user);
 	if (setresuid(ruid, ruid, ruid) < 0) {
-		perror("setresuid");
+		error("setresuid: %s\n", strerror(errno));
 		return -1;
 	}
 	return 0;
@@ -166,7 +178,7 @@ static int do_mount_options(unsigned long *opts, char *arg)
 		else if (expect_id("ro", &arg))
 			*opts |= MS_RDONLY;
 		else {
-			fprintf(stderr, "syntax error: mount option unsupported: %s\n", arg);
+			error("syntax error: mount option unsupported: %s\n", arg);
 			return -1;
 		}
 	}
@@ -190,14 +202,12 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 		return 0;
 	}
 	if (mount(src, tgt, fstype, flags | (opts & MS_REC ? MS_REC : 0), data) != 0) {
-		fprintf(stderr, "mount(%s, %s): %s\n", src, tgt,
-			strerror(errno));
+		error("mount(%s, %s): %s\n", src, tgt, strerror(errno));
 		return -1;
 	}
 	if (opts & ~(unsigned long)MS_REC) {
 		if (mount(src, tgt, fstype, MS_REMOUNT | flags | opts, data) != 0) {
-			fprintf(stderr, "mount(%s, %s, 0x%lx): %s\n", src, tgt, opts,
-				strerror(errno));
+			error("mount(%s, %s, 0x%lx): %s\n", src, tgt, opts, strerror(errno));
 			return -1;
 		}
 	}
@@ -219,7 +229,7 @@ static FILE *open_config_file(const char *config)
 		dirs = strdup(CONTAINER_PATH);
 	if (!*dirs) {
 		free(dirs);
-		fprintf(stderr, "No defined path for configuration file %s\n", config);
+		error("No defined path for configuration file %s\n", config);
 		errno = EINVAL;
 		return NULL;
 	}
@@ -273,7 +283,7 @@ static int do_config(const char *config)
 	int ret = 0;
 
 	if (!fp) {
-		fprintf(stderr, "%s: %s\n", config, strerror(errno));
+		error("config file: %s: %s\n", config, strerror(errno));
 		return -1;
 	}
 	while (fgets(line, BUFSIZ, fp)) {
@@ -297,7 +307,7 @@ static int do_config(const char *config)
 			if (a && b && a->arg == FROM && b->arg == TO)
 				ret = do_mount(a->val, b->val, NULL, MS_BIND, NULL, arg);
 			else {
-				fprintf(stderr, "'bind' expects 'from' and 'to' paths\n");
+				error("'bind' expects 'from' and 'to' paths\n");
 				ret = -1;
 			}
 			free(a);
@@ -311,7 +321,7 @@ static int do_config(const char *config)
 			if (a && b && a->arg == FROM && b->arg == TO)
 				ret = do_mount(a->val, b->val, NULL, MS_MOVE, NULL, arg);
 			else {
-				fprintf(stderr, "'move' expects 'from' and 'to' paths\n");
+				error("'move' expects 'from' and 'to' paths\n");
 				ret = -1;
 			}
 			free(a);
@@ -340,8 +350,8 @@ static int do_config(const char *config)
 			}
 			if (ret == -2 || !a || !b) {
 				ret = -1;
-				fprintf(stderr, "'union' expects exactly one 'to' path "
-					"and at least one from\n");
+				error("'union' expects exactly one 'to' path "
+				      "and at least one from\n");
 			} else {
 				char *data = malloc(sizeof("lowerdir") + lowersize);
 				strcpy(data, "lowerdir=");
@@ -367,7 +377,7 @@ static int do_config(const char *config)
 	return ret;
 }
 
-static void usage(const char *argv0, int code)
+static void usage(int code)
 {
 	fprintf(stderr, "%s [-hqcL] [-n <container>] [-e <prog>] [-- args...]\n"
 		"-h             show this text\n"
@@ -381,7 +391,7 @@ static void usage(const char *argv0, int code)
 		"-l             passed verbatim to the <prog>\n"
 		"               (usually makes shell to act as if started as a login shell)\n"
 		"\n",
-		argv0);
+		build_container);
 	exit(code);
 }
 
@@ -394,7 +404,7 @@ int main(int argc, char *argv[])
 	while ((opt = getopt(argc, argv, "hn:e:cLlq")) != -1)
 		switch (opt) {
 		case 'h':
-			usage(argv[0], 0);
+			usage(0);
 			break;
 		case 'n':
 			config = optarg;
@@ -415,8 +425,8 @@ int main(int argc, char *argv[])
 			verbose = 0;
 			break;
 		default:
-			fprintf(stderr, "Invalid command line parameter\n");
-			usage(argv[0], 1);
+			error("invalid command line parameter: %s\n", optarg);
+			usage(1);
 		}
 	if (!prog)
 		prog = getenv("SHELL");
@@ -440,13 +450,11 @@ int main(int argc, char *argv[])
 	if (unshare(CLONE_NEWNS) == 0) {
 		if (mount("none", "/", NULL,
 			  MS_REC | (lock_fs ? MS_PRIVATE : MS_SLAVE), NULL) != 0) {
-			fprintf(stderr, "%s: setting mount propagation: %s\n",
-				argv[0], strerror(errno));
+			error("setting mount propagation: %s\n", strerror(errno));
 			exit(2);
 		}
 	} else {
-		fprintf(stderr, "%s: unshare(CLONE_NEWNS): %s\n",
-			argv[0], strerror(errno));
+		error("unshare(CLONE_NEWNS): %s\n", strerror(errno));
 		exit(2);
 	}
 	/* FIXME that's a bit careless: reading and parsing with full privileges */
@@ -464,7 +472,7 @@ int main(int argc, char *argv[])
 		fputc('\n', stderr);
 	}
 	execvp(prog, argv + optind - 1);
-	fprintf(stderr, "%s: %s\n", prog, strerror(errno));
-	return 1;
+	error("execvp(%s): %s\n", prog, strerror(errno));
+	return 2;
 }
 
