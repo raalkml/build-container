@@ -13,6 +13,8 @@ test:
 	BUILD_CONTAINER_PATH=~/.config:/etc ./run-build-container -n NONE -c |grep config.file
 
 
+.PHONY: t/sudo-test.conf
+
 t/sudo-test.conf:
 	mkdir -p $(@D)/bin $(@D)/mnt
 	echo '#!/bin/sh' >$(@D)/mnt/gzip
