@@ -18,6 +18,7 @@
 #endif
 
 static int check_config;
+static int verbose = 1;
 
 static int drop_sudo_privileges(const char *sudo_user)
 {
@@ -246,11 +247,18 @@ static FILE *open_config_file(const char *config)
 		}
 		strcat(file, "/");
 		strcat(file, config);
-		if (check_config)
-			printf("# config file '%s'\n", file);
 		fp = fopen(file, "r");
-		if (fp)
+		if (fp) {
+			if (verbose || check_config)
+				fprintf(check_config ? stdout : verbose  ? stderr : NULL,
+					"# config file '%s'\n", file);
 			break;
+		}
+		if (check_config) {
+			int err = errno;
+			printf("# config file '%s': %s\n", file, strerror(err));
+			errno = err;
+		}
 		p = next;
 	}
 	free(dirs);
@@ -361,8 +369,9 @@ static int do_config(const char *config)
 
 static void usage(const char *argv0, int code)
 {
-	fprintf(stderr, "%s [-hcL] [-n <container>] [-e <prog>] [-- args...]\n"
+	fprintf(stderr, "%s [-hqcL] [-n <container>] [-e <prog>] [-- args...]\n"
 		"-h             show this text\n"
+		"-q             disable printing of program and config file names\n"
 		"-n <container> read configuration from {"CONTAINER_PATH"}/container\n"
 		"               (instead of just unsharing mount namespace).\n"
 		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
@@ -382,7 +391,7 @@ int main(int argc, char *argv[])
 	const char *prog = NULL;
 	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cLl")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLlq")) != -1)
 		switch (opt) {
 		case 'h':
 			usage(argv[0], 0);
@@ -401,6 +410,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'l':
 			login = 1;
+			break;
+		case 'q':
+			verbose = 0;
 			break;
 		default:
 			fprintf(stderr, "Invalid command line parameter\n");
@@ -444,6 +456,13 @@ int main(int argc, char *argv[])
 		exit(2);
 
 	argv[optind - 1] = (char *)prog;
+	if (verbose) {
+		int i;
+		fprintf(stderr, "%s: starting '%s'", build_container, prog);
+		for (i = optind; i < argc; ++i)
+			fprintf(stderr, " '%s'", argv[i]);
+		fputc('\n', stderr);
+	}
 	execvp(prog, argv + optind - 1);
 	fprintf(stderr, "%s: %s\n", prog, strerror(errno));
 	return 1;
