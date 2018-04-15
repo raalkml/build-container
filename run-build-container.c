@@ -369,6 +369,8 @@ static void usage(const char *argv0, int code)
 		"-c             check configuration only, don't run anything.\n"
 		"-L             lock file system inside the container from all\n"
 		"               changes in the outside (parent) namespace, i.e. unmounts.\n"
+		"-l             passed verbatim to the <prog>\n"
+		"               (usually makes shell to act as if started as a login shell)\n"
 		"\n",
 		argv0);
 	exit(code);
@@ -378,9 +380,9 @@ int main(int argc, char *argv[])
 {
 	const char *config = NULL;
 	const char *prog = NULL;
-	int opt, lock_fs = 0;
+	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cL")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLl")) != -1)
 		switch (opt) {
 		case 'h':
 			usage(argv[0], 0);
@@ -397,6 +399,9 @@ int main(int argc, char *argv[])
 		case 'L':
 			lock_fs = 1;
 			break;
+		case 'l':
+			login = 1;
+			break;
 		default:
 			fprintf(stderr, "Invalid command line parameter\n");
 			usage(argv[0], 1);
@@ -405,6 +410,10 @@ int main(int argc, char *argv[])
 		prog = getenv("SHELL");
 	if (!prog)
 		prog = "/bin/sh";
+	if (login) {
+		static char opt[] = "-l";
+		argv[--optind] = opt;
+	}
 	if (check_config) {
 		if (drop_privileges())
 			exit(2);
