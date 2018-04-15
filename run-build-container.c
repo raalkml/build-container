@@ -419,6 +419,10 @@ int main(int argc, char *argv[])
 			exit(2);
 		if (config && do_config(config) != 0)
 			exit(3);
+		printf("# starting '%s'", prog);
+		for (; optind < argc; ++optind)
+			printf(" '%s'", argv[optind]);
+		fputc('\n', stdout);
 		exit(0);
 	}
 	if (unshare(CLONE_NEWNS) == 0) {
@@ -440,7 +444,6 @@ int main(int argc, char *argv[])
 		exit(2);
 
 	argv[optind - 1] = (char *)prog;
-	// fprintf(stderr, "starting %s\n", prog);
 	execvp(prog, argv + optind - 1);
 	fprintf(stderr, "%s: %s\n", prog, strerror(errno));
 	return 1;
