@@ -427,6 +427,11 @@ static int do_config(const char *config)
 	}
 	fclose(fp);
 	free(config_dir);
+	while (head) {
+		a = head->next;
+		free(head);
+		head = a;
+	}
 	return ret;
 }
 
