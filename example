@@ -1,16 +1,17 @@
 # A bind mount, with options
 from /bin
-to mnt1
+to t/mnt1
 bind ro rec
 
 # A mountpoint move
-from mnt1
-to mnt2
+from t/mnt1
+to t/mnt2
 move
 
 # A r/o union
-# The order of `from` lines is meaningful!
+# The order of `from` lines is meaningful! (top-down)
+# More than two `from` lines allowed.
 from union-top
 from union-bottom
-to mnt3
+to t/mnt3
 union
