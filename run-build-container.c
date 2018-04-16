@@ -228,12 +228,18 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 		return 0;
 	}
 	if (mount(src, tgt, fstype, flags | (opts & MS_REC ? MS_REC : 0), data) != 0) {
-		error("mount(%s, %s): %s\n", src, tgt, strerror(errno));
+		error("%smount(%s, %s): %s\n",
+		      flags & MS_BIND ? "bind " :
+		      flags & MS_MOVE ? "move " : "",
+		      src, tgt, strerror(errno));
 		return -1;
 	}
 	if (opts & ~(unsigned long)MS_REC) {
 		if (mount(src, tgt, fstype, MS_REMOUNT | flags | opts, data) != 0) {
-			error("mount(%s, %s, 0x%lx): %s\n", src, tgt, opts, strerror(errno));
+			error("%smount(%s, %s, 0x%lx): %s\n",
+			      flags & MS_BIND ? "bind " :
+			      flags & MS_MOVE ? "move " : "",
+			      src, tgt, opts, strerror(errno));
 			return -1;
 		}
 	}
