@@ -173,7 +173,6 @@ static char *cleanup(char *s)
 }
 
 static char *abspath_buf;
-/* `dir` must contain trailing slash */
 static const char *abspath(const char *dir, const char *name)
 {
 	static size_t size;
@@ -181,10 +180,18 @@ static const char *abspath(const char *dir, const char *name)
 
 	if (is_absolute(name))
 		return name;
-	newsize = strlen(dir) + strlen(name) + 1;
+	if (name[0] == '~' && (name[1] == '/' || !name[1])) {
+		dir = getenv("HOME");
+		++name;
+		if (*name)
+			++name;
+	}
+	newsize = strlen(dir) + strlen(name) + 2;
 	if (newsize > size)
 		abspath_buf = realloc(abspath_buf, size = newsize);
 	strcpy(abspath_buf, dir);
+	if (abspath_buf[strlen(abspath_buf) - 1] != '/')
+		strcat(abspath_buf, "/");
 	strcat(abspath_buf, name);
 	return abspath_buf;
 }
