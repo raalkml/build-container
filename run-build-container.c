@@ -77,10 +77,13 @@ static int drop_sudo_privileges(const char *sudo_user)
 static int drop_privileges(void)
 {
 	uid_t ruid, euid, suid;
+
 	getresuid(&ruid, &euid, &suid);
-	char *sudo_user = getenv("SUDO_USER");
-	if (sudo_user)
-		return drop_sudo_privileges(sudo_user);
+	if (ruid == euid) {
+		char *sudo_user = getenv("SUDO_USER");
+		if (sudo_user)
+			return drop_sudo_privileges(sudo_user);
+	}
 	if (setresuid(ruid, ruid, ruid) < 0) {
 		error("setresuid: %s\n", strerror(errno));
 		return -1;
