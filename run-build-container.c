@@ -92,6 +92,7 @@ static int drop_privileges(void)
 }
 
 enum arg {
+	WORK,
 	FROM,
 	TO,
 };
@@ -351,6 +352,8 @@ static int do_config(const char *config)
 			push(&head, FROM, abspath(config_dir, cleanup(arg)));
 		else if (expect_id("to", &arg))
 			push(&head, TO, abspath(config_dir, cleanup(arg)));
+		else if (expect_id("work", &arg))
+			push(&head, WORK, abspath(config_dir, cleanup(arg)));
 		else if (expect_id("bind", &arg)) {
 			b = pop(&head);
 			a = pop(&head);
@@ -415,6 +418,56 @@ static int do_config(const char *config)
 				ret = do_mount("union", b->val, "overlay", 0, data, arg);
 				free(data);
 			}
+			free(b);
+			while (a) {
+				e = a->next;
+				free(a);
+				a = e;
+			}
+		}
+		else if (expect_id("overlay", &arg)) {
+			struct stk *e, *w;
+			/* collect one 'work', two 'from' paths, and exactly one 'to' */
+			w = a = b = NULL;
+			while (head && ret == 0 && !(a && a->next && b && w)) {
+				switch (head->arg) {
+				case WORK:
+					if (w)
+						ret = -2;
+					else
+						w = pop(&head);
+					break;
+				case FROM:
+					if (a && a->next)
+						ret = -2;
+					else {
+						e = pop(&head);
+						e->next = a;
+						a = e;
+					}
+					break;
+				case TO:
+					if (b)
+						ret = -2;
+					else
+						b = pop(&head);
+					break;
+				}
+			}
+			if (ret == -2 || !(a && a->next) || !b || !w) {
+				ret = -1;
+				error("'overlay' expects exactly one 'work', two 'from', "
+				      "and one 'to' path lines\n");
+			} else {
+				char *data = malloc(sizeof("lowerdir=,upperdir=,workdir=") + 
+						    strlen(a->val) + strlen(a->next->val) +
+						    strlen(b->val) + strlen(w->val));
+				sprintf(data, "upperdir=%s,lowerdir=%s,workdir=%s",
+					a->val, a->next->val, w->val);
+				ret = do_mount("overlay", b->val, "overlay", 0, data, arg);
+				free(data);
+			}
+			free(w);
 			free(b);
 			while (a) {
 				e = a->next;
