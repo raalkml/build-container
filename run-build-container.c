@@ -217,13 +217,32 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 	return 0;
 }
 
-static FILE *open_config_file(const char *config)
+static FILE *open_config_file(const char *file)
+{
+	FILE *fp = fopen(file, "r");
+
+	if (fp) {
+		if (verbose || check_config)
+			fprintf(check_config ? stdout : verbose  ? stderr : NULL,
+				"# config file '%s'\n", file);
+	} else if (check_config) {
+		int err = errno;
+		printf("# config file '%s': %s\n", file, strerror(err));
+		errno = err;
+	}
+	return fp;
+}
+
+static FILE *open_config(const char *config)
 {
 	static char dot[] = ".";
 	FILE *fp;
-	char *dirs = getenv(BUILD_CONTAINER_PATH);
+	char *dirs;
 	char *p;
 
+	if ('/' == *config)
+		return open_config_file(config);
+	dirs = getenv(BUILD_CONTAINER_PATH);
 	if (dirs)
 		/* Necessary: protecting environment
 		   for subsequent users of the variable. */
@@ -260,18 +279,9 @@ static FILE *open_config_file(const char *config)
 		}
 		strcat(file, "/");
 		strcat(file, config);
-		fp = fopen(file, "r");
-		if (fp) {
-			if (verbose || check_config)
-				fprintf(check_config ? stdout : verbose  ? stderr : NULL,
-					"# config file '%s'\n", file);
+		fp = open_config_file(file);
+		if (fp)
 			break;
-		}
-		if (check_config) {
-			int err = errno;
-			printf("# config file '%s': %s\n", file, strerror(err));
-			errno = err;
-		}
 		p = next;
 	}
 	free(dirs);
@@ -280,7 +290,7 @@ static FILE *open_config_file(const char *config)
 
 static int do_config(const char *config)
 {
-	FILE *fp = open_config_file(config);
+	FILE *fp = open_config(config);
 	char line[BUFSIZ];
 	struct stk *head = NULL, *a, *b;
 	int ret = 0;
