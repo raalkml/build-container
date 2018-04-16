@@ -24,16 +24,17 @@ test:
 
 .PHONY: t/sudo-test1.conf
 t/sudo-test1.conf:
+	mkdir -p t/mnt1 t/mnt2 t/mnt3
 	mkdir -p $(@D)/bin $(@D)/mnt
 	echo '#!/bin/sh' >$(@D)/mnt/gzip
 	echo 'echo Not a gzip' >>$(@D)/mnt/gzip
 	chmod +x $(@D)/mnt/gzip
 	exec >$@; \
-	echo 'from $(@D)/mnt'; \
+	echo 'from mnt'; \
 	echo 'from /bin'; \
-	echo 'to $(@D)/bin'; \
+	echo 'to bin'; \
 	echo 'union'; \
-	echo 'from $(@D)/bin'; \
+	echo 'from bin'; \
 	echo 'to /bin'; \
 	echo 'move'; \
 	echo 'from $(abspath .)'; \
@@ -47,12 +48,13 @@ t/sudo-test1.conf:
 
 .PHONY: t/sudo-test2.conf
 t/sudo-test2.conf:
+	mkdir -p t/mnt1 t/mnt2 t/mnt3
 	mkdir -p $(@D)/bin $(@D)/mnt
 	echo '#!/bin/sh' >$(@D)/mnt/gzip
 	echo 'echo Not a gzip' >>$(@D)/mnt/gzip
 	chmod +x $(@D)/mnt/gzip
 	exec >$@; \
-	echo 'from $(@D)/mnt/gzip'; \
+	echo 'from mnt/gzip'; \
 	echo 'to /bin/gzip'; \
 	echo 'bind'
 	BUILD_CONTAINER_PATH=$(abspath $(@D)) ./run-build-container -n $(@F) -c
