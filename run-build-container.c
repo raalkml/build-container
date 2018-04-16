@@ -194,6 +194,7 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 {
 	unsigned long opts = 0;
 
+	// FIXME validate if the src and tgt are accessible by the target user
 	if (do_mount_options(&opts, args) != 0)
 		return -1;
 	if (check_config) {
