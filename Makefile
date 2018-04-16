@@ -26,8 +26,7 @@ test:
 
 .PHONY: t/sudo-test1.conf
 t/sudo-test1.conf:
-	mkdir -p t/mnt1 t/mnt2 t/mnt3
-	mkdir -p $(@D)/bin $(@D)/mnt
+	mkdir -p $(addprefix bin mnt mnt1 mnt2 mnt3,$(@D)/)
 	echo '#!/bin/sh' >$(@D)/mnt/gzip
 	echo 'echo Not a gzip' >>$(@D)/mnt/gzip
 	chmod +x $(@D)/mnt/gzip
@@ -50,8 +49,7 @@ t/sudo-test1.conf:
 
 .PHONY: t/sudo-test2.conf
 t/sudo-test2.conf:
-	mkdir -p t/mnt1 t/mnt2 t/mnt3
-	mkdir -p $(@D)/bin $(@D)/mnt
+	mkdir -p $(addprefix bin mnt mnt1 mnt2 mnt3,$(@D)/)
 	echo '#!/bin/sh' >$(@D)/mnt/gzip
 	echo 'echo Not a gzip' >>$(@D)/mnt/gzip
 	chmod +x $(@D)/mnt/gzip
