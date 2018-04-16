@@ -1,6 +1,14 @@
 CPPFLAGS = -D_GNU_SOURCE -D'CONTAINER_DIR="."'
 CFLAGS = -ggdb -O0
+
+DESTDIR=
+PREFIX=/usr/local/bin
+
 run-build-container: run-build-container.c
+
+.PHONY:
+install:
+	install -m4755 -oroot run-build-container '$(DESTDIR)$(PREFIX)/'
 
 .PHONY: test
 test:
