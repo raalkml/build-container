@@ -21,6 +21,7 @@
 static const char build_container[] = "build-container";
 static int check_config;
 static int verbose = 1;
+static int chrooted;
 
 static void error(const char *fmt, ...)
 {
@@ -245,6 +246,19 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 		}
 	}
 	return 0;
+}
+
+static int do_chroot(const char *root)
+{
+	chrooted = 1;
+	if (check_config) {
+		printf("# chroot '%s'\n", root);
+		return 0;
+	}
+	if (chroot(root) == 0)
+		return 0;
+	error("chroot(%s): %s\n", root, strerror(errno));
+	return -1;
 }
 
 static FILE *open_config_file(const char *file, char **dir)
@@ -475,6 +489,9 @@ static int do_config(const char *config)
 				a = e;
 			}
 		}
+		else if (expect_id("chroot", &arg)) {
+			ret = do_chroot(abspath(config_dir, cleanup(arg)));
+		}
 		if (ret)
 			break;
 	}
@@ -557,6 +574,8 @@ int main(int argc, char *argv[])
 			exit(2);
 		if (config && do_config(config) != 0)
 			exit(3);
+		if (chrooted && !cd_to)
+			cd_to = get_current_dir_name();
 		if (cd_to)
 			printf("# cd '%s'\n", cd_to);
 		printf("# starting '%s'", prog);
@@ -578,9 +597,10 @@ int main(int argc, char *argv[])
 	/* FIXME that's a bit careless: reading and parsing with full privileges */
 	if (config && do_config(config) != 0)
 		exit(3);
+	if (chrooted && !cd_to)
+		cd_to = get_current_dir_name();
 	if (drop_privileges())
 		exit(2);
-
 	if (cd_to && chdir(cd_to) != 0)  {
 		error("chdir(%s): %s\n", cd_to, strerror(errno));
 		exit(3);

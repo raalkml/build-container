@@ -24,3 +24,6 @@ from union-bottom
 work t/mnt1
 to t/mnt4
 overlay
+
+# chroot(2)
+# chroot t/mnt4
