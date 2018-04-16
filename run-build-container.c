@@ -490,7 +490,7 @@ static int do_config(const char *config)
 
 static void usage(int code)
 {
-	fprintf(stderr, "%s [-hqcL] [-n <container>] [-e <prog>] [-- args...]\n"
+	fprintf(stderr, "%s [-hqcL] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
 		"-h             show this text\n"
 		"-q             disable printing of program and config file names\n"
 		"-n <container> read configuration from {"CONTAINER_PATH"}/container\n"
@@ -501,6 +501,7 @@ static void usage(int code)
 		"               changes in the outside (parent) namespace, i.e. unmounts.\n"
 		"-l             passed verbatim to the <prog>\n"
 		"               (usually makes shell to act as if started as a login shell)\n"
+		"-d <dir>       change current directory to <dir> before executing <prog>\n"
 		"\n",
 		build_container);
 	exit(code);
@@ -510,15 +511,19 @@ int main(int argc, char *argv[])
 {
 	const char *config = NULL;
 	const char *prog = NULL;
+	const char *cd_to = NULL;
 	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cLlq")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLlqd:")) != -1)
 		switch (opt) {
 		case 'h':
 			usage(0);
 			break;
 		case 'n':
 			config = optarg;
+			break;
+		case 'd':
+			cd_to = optarg;
 			break;
 		case 'e':
 			prog = optarg;
@@ -552,6 +557,8 @@ int main(int argc, char *argv[])
 			exit(2);
 		if (config && do_config(config) != 0)
 			exit(3);
+		if (cd_to)
+			printf("# cd '%s'\n", cd_to);
 		printf("# starting '%s'", prog);
 		for (; optind < argc; ++optind)
 			printf(" '%s'", argv[optind]);
@@ -574,10 +581,15 @@ int main(int argc, char *argv[])
 	if (drop_privileges())
 		exit(2);
 
+	if (cd_to && chdir(cd_to) != 0)  {
+		error("chdir(%s): %s\n", cd_to, strerror(errno));
+		exit(3);
+	}
 	argv[optind - 1] = (char *)prog;
 	if (verbose) {
 		int i;
-		fprintf(stderr, "%s: starting '%s'", build_container, prog);
+		fprintf(stderr, "%s:%s%s starting '%s'", build_container,
+			cd_to ? cd_to : "", cd_to ? ":" : "", prog);
 		for (i = optind; i < argc; ++i)
 			fprintf(stderr, " '%s'", argv[i]);
 		fputc('\n', stderr);
