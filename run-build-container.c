@@ -137,6 +137,11 @@ static int at_id_terminator(const char *s)
 	return strchr(spaces, *s) || at_line_terminator(s);
 }
 
+static int is_absolute(const char *path)
+{
+	return path && '/' == *path;
+}
+
 static int expect_id(const char *sym, char **s)
 {
 	char *p = *s;
@@ -163,6 +168,23 @@ static char *cleanup(char *s)
 	else if (n && (s[n - 1] == '\n' || s[n - 1] == '\r'))
 		s[n - 1] = '\0';
 	return s;
+}
+
+static char *abspath_buf;
+/* `dir` must contain trailing slash */
+static const char *abspath(const char *dir, const char *name)
+{
+	static size_t size;
+	size_t newsize;
+
+	if (is_absolute(name))
+		return name;
+	newsize = strlen(dir) + strlen(name) + 1;
+	if (newsize > size)
+		abspath_buf = realloc(abspath_buf, size = newsize);
+	strcpy(abspath_buf, dir);
+	strcat(abspath_buf, name);
+	return abspath_buf;
 }
 
 static int do_mount_options(unsigned long *opts, char *arg)
@@ -218,11 +240,20 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 	return 0;
 }
 
-static FILE *open_config_file(const char *file)
+static FILE *open_config_file(const char *file, char **dir)
 {
 	FILE *fp = fopen(file, "r");
 
 	if (fp) {
+		const char *e = file + strlen(file);
+
+		while (e > file)
+			if ('/' == *--e)
+				break;
+		if (e == file)
+			*dir = strdup("./");
+		else
+			*dir = strndup(file, e - file + 1);
 		if (verbose || check_config)
 			fprintf(check_config ? stdout : verbose  ? stderr : NULL,
 				"# config file '%s'\n", file);
@@ -234,15 +265,15 @@ static FILE *open_config_file(const char *file)
 	return fp;
 }
 
-static FILE *open_config(const char *config)
+static FILE *open_config(const char *config, char **config_dir)
 {
 	static char dot[] = ".";
 	FILE *fp;
 	char *dirs;
 	char *p;
 
-	if ('/' == *config)
-		return open_config_file(config);
+	if (is_absolute(config))
+		return open_config_file(config, config_dir);
 	dirs = getenv(BUILD_CONTAINER_PATH);
 	if (dirs)
 		/* Necessary: protecting environment
@@ -280,7 +311,7 @@ static FILE *open_config(const char *config)
 		}
 		strcat(file, "/");
 		strcat(file, config);
-		fp = open_config_file(file);
+		fp = open_config_file(file, config_dir);
 		if (fp)
 			break;
 		p = next;
@@ -291,10 +322,11 @@ static FILE *open_config(const char *config)
 
 static int do_config(const char *config)
 {
-	FILE *fp = open_config(config);
 	char line[BUFSIZ];
 	struct stk *head = NULL, *a, *b;
 	int ret = 0;
+	char *config_dir;
+	FILE *fp = open_config(config, &config_dir);
 
 	if (!fp) {
 		error("config file: %s: %s\n", config, strerror(errno));
@@ -310,9 +342,9 @@ static int do_config(const char *config)
 		 * XXX a whitespace character: all leading space is removed.
 		 */
 		if (expect_id("from", &arg))
-			push(&head, FROM, cleanup(arg));
+			push(&head, FROM, abspath(config_dir, cleanup(arg)));
 		else if (expect_id("to", &arg))
-			push(&head, TO, cleanup(arg));
+			push(&head, TO, abspath(config_dir, cleanup(arg)));
 		else if (expect_id("bind", &arg)) {
 			b = pop(&head);
 			a = pop(&head);
@@ -388,6 +420,7 @@ static int do_config(const char *config)
 			break;
 	}
 	fclose(fp);
+	free(config_dir);
 	return ret;
 }
 
