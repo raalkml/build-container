@@ -519,6 +519,7 @@ static void usage(int code)
 	fprintf(stderr, "%s [-hqcL] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
 		"-h             show this text\n"
 		"-q             disable printing of program and config file names\n"
+		"-v             increase verbosity\n"
 		"-n <container> read configuration from {"CONTAINER_PATH"}/container\n"
 		"               (instead of just unsharing mount namespace).\n"
 		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
@@ -541,7 +542,7 @@ int main(int argc, char *argv[])
 	const char *cd_to = NULL;
 	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cLlqd:P")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLlqd:Pv")) != -1)
 		switch (opt) {
 		case 'h':
 			usage(0);
@@ -566,6 +567,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'q':
 			verbose = 0;
+			break;
+		case 'v':
+			++verbose;
 			break;
 		case 'P':
 			pidns = 1;
@@ -641,7 +645,7 @@ int main(int argc, char *argv[])
 					return 2;
 				}
 			if (WIFEXITED(status)) {
-				if (verbose)
+				if (verbose > 1)
 					fprintf(stderr, "%s finished (%d)\n", prog, WEXITSTATUS(status));
 				return WEXITSTATUS(status);
 			}
