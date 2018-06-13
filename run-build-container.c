@@ -575,7 +575,6 @@ int main(int argc, char *argv[])
 			pidns = 1;
 			break;
 		default:
-			error("invalid command line parameter: %s\n", optarg);
 			usage(1);
 		}
 	if (!prog)
