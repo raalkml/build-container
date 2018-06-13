@@ -7,6 +7,7 @@
 #include <sched.h>
 #include <sys/types.h>
 #include <sys/mount.h>
+#include <wait.h>
 #include <pwd.h>
 #include <grp.h>
 #include <getopt.h>
@@ -22,6 +23,7 @@ static const char build_container[] = "build-container";
 static int check_config;
 static int verbose = 1;
 static int chrooted;
+static int pidns;
 
 static void error(const char *fmt, ...)
 {
@@ -526,6 +528,7 @@ static void usage(int code)
 		"-l             passed verbatim to the <prog>\n"
 		"               (usually makes shell to act as if started as a login shell)\n"
 		"-d <dir>       change current directory to <dir> before executing <prog>\n"
+		"-P             unshare the pid namespace\n"
 		"\n",
 		build_container);
 	exit(code);
@@ -538,7 +541,7 @@ int main(int argc, char *argv[])
 	const char *cd_to = NULL;
 	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cLlqd:")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLlqd:P")) != -1)
 		switch (opt) {
 		case 'h':
 			usage(0);
@@ -563,6 +566,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'q':
 			verbose = 0;
+			break;
+		case 'P':
+			pidns = 1;
 			break;
 		default:
 			error("invalid command line parameter: %s\n", optarg);
@@ -606,6 +612,10 @@ int main(int argc, char *argv[])
 		exit(3);
 	if (chrooted && !cd_to)
 		cd_to = get_current_dir_name();
+	if (pidns && unshare(CLONE_NEWPID) != 0) {
+		error("unshare(CLONE_NEWPID): %s\n", strerror(errno));
+		exit(2);
+	}
 	if (drop_privileges())
 		exit(2);
 	if (cd_to && chdir(cd_to) != 0)  {
@@ -621,8 +631,40 @@ int main(int argc, char *argv[])
 			fprintf(stderr, " '%s'", argv[i]);
 		fputc('\n', stderr);
 	}
-	execvp(prog, argv + optind - 1);
-	error("execvp(%s): %s\n", prog, strerror(errno));
+	if (pidns) {
+		switch (fork()) {
+			int status;
+		default:
+			while (wait(&status) == -1)
+				if (EINTR != errno) {
+					error("wait(%s): %s\n", prog, strerror(errno));
+					return 2;
+				}
+			if (WIFEXITED(status)) {
+				if (verbose)
+					fprintf(stderr, "%s finished (%d)\n", prog, WEXITSTATUS(status));
+				return WEXITSTATUS(status);
+			}
+			else if (WIFSIGNALED(status)) {
+				error("%s: %s\n", prog, strsignal(WTERMSIG(status)));
+				return 128 + WSTOPSIG(status);
+			}
+			error("failed(%s)\n", prog);
+			return 127;
+		case -1:
+			error("fork(%s): %s\n", prog, strerror(errno));
+			break;
+		case 0:
+			if (verbose)
+				fprintf(stderr, "%s: %s: pid %ld\n", build_container, prog, (long)getpid());
+			execvp(prog, argv + optind - 1);
+			error("execvp(%s): %s\n", prog, strerror(errno));
+			_exit(2);
+		}
+	} else {
+		execvp(prog, argv + optind - 1);
+		error("execvp(%s): %s\n", prog, strerror(errno));
+	}
 	return 2;
 }
 
