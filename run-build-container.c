@@ -520,8 +520,9 @@ static void usage(int code)
 		"-h             show this text\n"
 		"-q             disable printing of program and config file names\n"
 		"-v             increase verbosity\n"
-		"-n <container> read configuration from {"CONTAINER_PATH"}/container\n"
-		"               (instead of just unsharing mount namespace).\n"
+		"-n <container> read configuration from $"BUILD_CONTAINER_PATH" if set, or from\n"
+		"               "CONTAINER_PATH"/container\n"
+		"               (instead of just unsharing namespaces).\n"
 		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
 		"-c             check configuration only, don't run anything.\n"
 		"-L             lock file system inside the container from all\n"
@@ -529,7 +530,7 @@ static void usage(int code)
 		"-l             passed verbatim to the <prog>\n"
 		"               (usually makes shell to act as if started as a login shell)\n"
 		"-d <dir>       change current directory to <dir> before executing <prog>\n"
-		"-P             unshare the pid namespace\n"
+		"-P             unshare the pid namespace to avoid run-away build processes\n"
 		"\n",
 		build_container);
 	exit(code);
