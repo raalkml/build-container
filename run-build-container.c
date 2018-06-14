@@ -530,10 +530,73 @@ static void usage(int code)
 		"-l             passed verbatim to the <prog>\n"
 		"               (usually makes shell to act as if started as a login shell)\n"
 		"-d <dir>       change current directory to <dir> before executing <prog>\n"
-		"-P             unshare the pid namespace to avoid run-away build processes\n"
+		"-P             unshare the pid namespace to avoid run-away build processes.\n"
+		"               Given twice, will also mount a new /proc in the container\n"
 		"\n",
 		build_container);
 	exit(code);
+}
+
+static int run_container(const char *cd_to, const char *prog, char **argv)
+{
+	if (drop_privileges())
+		return 2;
+	if (cd_to && chdir(cd_to) != 0)  {
+		error("chdir(%s): %s\n", cd_to, strerror(errno));
+		return 3;
+	}
+	execvp(prog, argv);
+	error("execvp(%s): %s\n", prog, strerror(errno));
+	return 2;
+}
+
+static int run_pidns_container(const char *cd_to, const char *prog, char **argv)
+{
+	if (unshare(CLONE_NEWPID) != 0) {
+		error("unshare(CLONE_NEWPID): %s\n", strerror(errno));
+		return 2;
+	}
+	switch (fork()) {
+		int status;
+	case -1:
+		error("fork(%s): %s\n", prog, strerror(errno));
+		break;
+	case 0:
+		if (verbose)
+			fprintf(stderr, "%s: %s: pid %ld\n", build_container, prog, (long)getpid());
+		if (pidns > 1 && mount("proc", "/proc", "proc", 0, NULL) != 0) {
+			error("mount(proc): %s\n", strerror(errno));
+			exit(2);
+		}
+		if (drop_privileges())
+			exit(2);
+		if (cd_to && chdir(cd_to) != 0)  {
+			error("chdir(%s): %s\n", cd_to, strerror(errno));
+			exit(3);
+		}
+		execvp(prog, argv);
+		error("execvp(%s): %s\n", prog, strerror(errno));
+		_exit(2);
+	default:
+		/* TODO drop privileges again? */
+		while (wait(&status) == -1)
+			if (EINTR != errno) {
+				error("wait(%s): %s\n", prog, strerror(errno));
+				return 2;
+			}
+		if (WIFEXITED(status)) {
+			if (verbose > 1)
+				fprintf(stderr, "%s finished (%d)\n", prog, WEXITSTATUS(status));
+			return WEXITSTATUS(status);
+		}
+		else if (WIFSIGNALED(status)) {
+			error("%s: %s\n", prog, strsignal(WTERMSIG(status)));
+			return 128 + WSTOPSIG(status);
+		}
+		error("failed(%s)\n", prog);
+		return 127;
+	}
+	return 2;
 }
 
 int main(int argc, char *argv[])
@@ -573,7 +636,7 @@ int main(int argc, char *argv[])
 			++verbose;
 			break;
 		case 'P':
-			pidns = 1;
+			++pidns;
 			break;
 		default:
 			usage(1);
@@ -616,16 +679,6 @@ int main(int argc, char *argv[])
 		exit(3);
 	if (chrooted && !cd_to)
 		cd_to = get_current_dir_name();
-	if (pidns && unshare(CLONE_NEWPID) != 0) {
-		error("unshare(CLONE_NEWPID): %s\n", strerror(errno));
-		exit(2);
-	}
-	if (drop_privileges())
-		exit(2);
-	if (cd_to && chdir(cd_to) != 0)  {
-		error("chdir(%s): %s\n", cd_to, strerror(errno));
-		exit(3);
-	}
 	argv[optind - 1] = (char *)prog;
 	if (verbose) {
 		int i;
@@ -635,40 +688,8 @@ int main(int argc, char *argv[])
 			fprintf(stderr, " '%s'", argv[i]);
 		fputc('\n', stderr);
 	}
-	if (pidns) {
-		switch (fork()) {
-			int status;
-		default:
-			while (wait(&status) == -1)
-				if (EINTR != errno) {
-					error("wait(%s): %s\n", prog, strerror(errno));
-					return 2;
-				}
-			if (WIFEXITED(status)) {
-				if (verbose > 1)
-					fprintf(stderr, "%s finished (%d)\n", prog, WEXITSTATUS(status));
-				return WEXITSTATUS(status);
-			}
-			else if (WIFSIGNALED(status)) {
-				error("%s: %s\n", prog, strsignal(WTERMSIG(status)));
-				return 128 + WSTOPSIG(status);
-			}
-			error("failed(%s)\n", prog);
-			return 127;
-		case -1:
-			error("fork(%s): %s\n", prog, strerror(errno));
-			break;
-		case 0:
-			if (verbose)
-				fprintf(stderr, "%s: %s: pid %ld\n", build_container, prog, (long)getpid());
-			execvp(prog, argv + optind - 1);
-			error("execvp(%s): %s\n", prog, strerror(errno));
-			_exit(2);
-		}
-	} else {
-		execvp(prog, argv + optind - 1);
-		error("execvp(%s): %s\n", prog, strerror(errno));
-	}
-	return 2;
+	if (pidns)
+		return run_pidns_container(cd_to, prog, argv + optind - 1);
+	return run_container(cd_to, prog, argv + optind - 1);
 }
 
