@@ -35,10 +35,23 @@ static void error(const char *fmt, ...)
 	va_end(args);
 }
 
-static int drop_sudo_privileges(const char *sudo_user)
+struct privileges
+{
+	unsigned has_uid:1,
+		 has_gid:1;
+	int ngroups;
+	gid_t *groups;
+	uid_t uid;
+	gid_t gid;
+	const char *user;
+	const char *home;
+};
+static struct privileges privileges;
+
+static int collect_sudo_privileges(const char *sudo_user)
 {
 	int ngroups, nalloc = 10;
-	gid_t *groups;
+	gid_t *groups = NULL;
 	struct passwd *pw;
 
 	errno = 0;
@@ -50,34 +63,33 @@ static int drop_sudo_privileges(const char *sudo_user)
 		return -1;
 	}
 	for (;;) {
-		groups = malloc(sizeof(gid_t) * nalloc);
+		groups = realloc(groups, sizeof(*groups) * nalloc);
+		if (!groups) {
+			error("SUDO_USER=\"%s\": no memory for groups\n", sudo_user);
+			return -1;
+		}
 		ngroups = nalloc;
-		if (getgrouplist(pw->pw_name, pw->pw_gid, groups, &ngroups) < 0)
-			nalloc = ngroups > nalloc ? ngroups + 1: 2 * nalloc;
-		else
+		if (getgrouplist(pw->pw_name, pw->pw_gid, groups, &ngroups) >= 0)
 			break;
+		if (!ngroups) {
+			free(groups);
+			groups = NULL;
+			break;
+		}
+		nalloc = ngroups > nalloc ? ngroups + 1: 2 * nalloc;
 	}
-	if (setregid(pw->pw_gid, pw->pw_gid) < 0) {
-		error("SUDO_USER (gid): %s\n", strerror(errno));
-		return -1;
-	}
-	if (setgroups(ngroups, groups) < 0) {
-		error("SUDO_USER (groups): %s\n", strerror(errno));
-		return -1;
-	}
-	free(groups);
-	if (setreuid(pw->pw_uid, pw->pw_uid) < 0) {
-		error("SUDO_USER (uid): %s\n", strerror(errno));
-		return -1;
-	}
-	setenv("USER", sudo_user, 1);
-	setenv("USERNAME", sudo_user, 1);
-	setenv("LOGNAME", sudo_user, 1);
-	setenv("HOME", pw->pw_dir, 1);
-	/* unsetenv("MAIL"); */
+	privileges.groups = groups;
+	privileges.ngroups = ngroups;
+	privileges.has_gid = 1;
+	privileges.gid = pw->pw_gid;
+	privileges.has_uid = 1;
+	privileges.uid = pw->pw_uid;
+	privileges.user = sudo_user;
+	privileges.home = pw->pw_dir;
+	return 0;
 }
 
-static int drop_privileges(void)
+static int collect_privileges(void)
 {
 	uid_t ruid, euid, suid;
 
@@ -85,13 +97,38 @@ static int drop_privileges(void)
 	if (ruid == euid) {
 		char *sudo_user = getenv("SUDO_USER");
 		if (sudo_user)
-			return drop_sudo_privileges(sudo_user);
+			return collect_sudo_privileges(sudo_user);
 	}
-	if (setresuid(ruid, ruid, ruid) < 0) {
-		error("setresuid: %s\n", strerror(errno));
+	privileges.has_uid = 1;
+	privileges.uid = ruid;
+	return 0;
+}
+
+static int drop_privileges(void)
+{
+	if (privileges.has_gid && setregid(privileges.gid, privileges.gid) < 0) {
+		error("setregid(%ld): %s\n", (long)privileges.gid, strerror(errno));
 		return -1;
 	}
-	return 0;
+	if (privileges.ngroups && setgroups(privileges.ngroups, privileges.groups) < 0) {
+		error("setgroups: %s\n", strerror(errno));
+		return -1;
+	}
+	privileges.ngroups = 0;
+	free(privileges.groups);
+	privileges.groups = NULL;
+	if (privileges.has_uid && setreuid(privileges.uid, privileges.uid) < 0) {
+		error("setreuid(%ld): %s\n", (long)privileges.uid, strerror(errno));
+		return -1;
+	}
+	if (privileges.user) {
+		setenv("USER", privileges.user, 1);
+		setenv("USERNAME", privileges.user, 1);
+		setenv("LOGNAME", privileges.user, 1);
+	}
+	if (privileges.home)
+		setenv("HOME", privileges.home, 1);
+	/* unsetenv("MAIL"); */
 }
 
 enum arg {
@@ -578,7 +615,11 @@ static int run_pidns_container(const char *cd_to, const char *prog, char **argv)
 		error("execvp(%s): %s\n", prog, strerror(errno));
 		_exit(2);
 	default:
-		/* TODO drop privileges again? */
+		/*
+		 * Currently, dropping privileges here is not strictly
+		 * speaking necessary. Drop them anyway just in case.
+		 */
+		(void)drop_privileges();
 		while (wait(&status) == -1)
 			if (EINTR != errno) {
 				error("wait(%s): %s\n", prog, strerror(errno));
@@ -649,6 +690,9 @@ int main(int argc, char *argv[])
 		static char opt[] = "-l";
 		argv[--optind] = opt;
 	}
+	/* collect privileges of the unmodified process environment */
+	if (collect_privileges())
+		exit(2);
 	if (check_config) {
 		if (drop_privileges())
 			exit(2);
