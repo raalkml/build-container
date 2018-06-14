@@ -81,3 +81,10 @@ t/sudo-test3.conf:
 	    |grep '^bin$$'
 
 sudo-test: t/sudo-test1.conf t/sudo-test2.conf t/sudo-test3.conf
+	# no pid namespace
+	sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -e kill -- -0 $$$$
+	# pid namespace, parent proc fs
+	sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -e kill -P -- -0 $$$$ || true
+	# pid namespace, own proc fs
+	sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -e grep -PP -- \
+	    '^Pid:[[:space:]]\+1[[:space:]]*$$' /proc/self/status
