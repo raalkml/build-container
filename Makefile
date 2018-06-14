@@ -12,7 +12,7 @@ install:
 
 .PHONY: test
 test:
-	mkdir -p t/mnt1 t/mnt2 t/mnt3 t/mn4
+	mkdir -p t/mnt1 t/mnt2 t/mnt3 t/mnt4
 	./run-build-container -n $(abspath example) -c >t/result
 	grep config.file.\'$(abspath example)\' t/result
 	./run-build-container -n $(abspath example) -d t -c >t/result
@@ -34,7 +34,7 @@ test:
 
 .PHONY: t/sudo-test1.conf
 t/sudo-test1.conf:
-	mkdir -p $(addprefix bin mnt mnt1 mnt2 mnt3,$(@D)/)
+	mkdir -p $(addprefix $(@D)/,bin mnt mnt1 mnt2 mnt3)
 	echo '#!/bin/sh' >$(@D)/mnt/gzip
 	echo 'echo Not a gzip' >>$(@D)/mnt/gzip
 	chmod +x $(@D)/mnt/gzip
@@ -57,7 +57,7 @@ t/sudo-test1.conf:
 
 .PHONY: t/sudo-test2.conf
 t/sudo-test2.conf:
-	mkdir -p $(addprefix bin mnt mnt1 mnt2 mnt3,$(@D)/)
+	mkdir -p $(addprefix $(@D)/,bin mnt mnt1 mnt2 mnt3)
 	echo '#!/bin/sh' >$(@D)/mnt/gzip
 	echo 'echo Not a gzip' >>$(@D)/mnt/gzip
 	chmod +x $(@D)/mnt/gzip
@@ -71,7 +71,7 @@ t/sudo-test2.conf:
 
 .PHONY: t/sudo-test3.conf
 t/sudo-test3.conf:
-	mkdir -p $(addprefix mnt,$(@D)/)
+	mkdir -p $(addprefix $(@D)/,mnt)
 	exec >$@; \
 	echo 'from /usr'; \
 	echo 'to mnt'; \
