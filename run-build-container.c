@@ -147,12 +147,12 @@ struct stk
 {
 	struct stk *next;
 	enum arg arg;
-	char val[0];
+	char val[1];
 };
 
 static void push(struct stk **head, enum arg arg, const char *val)
 {
-	struct stk *e = malloc(sizeof(struct stk) + strlen(val) + 1);
+	struct stk *e = malloc(sizeof(struct stk) + strlen(val));
 
 	e->next = *head;
 	e->arg = arg;
