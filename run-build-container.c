@@ -278,7 +278,7 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 		       src, tgt, fstype, flags | opts,
 		       flags & MS_BIND ? " bind" :
 		       flags & MS_MOVE ? " move" : "",
-		       data);
+		       (const char *)data);
 		return 0;
 	}
 	if (mount(src, tgt, fstype, flags | (opts & MS_REC ? MS_REC : 0), data) != 0) {
@@ -328,8 +328,7 @@ static FILE *open_config_file(const char *file, char **dir)
 		else
 			*dir = strndup(file, e - file + 1);
 		if (verbose || check_config)
-			fprintf(check_config ? stdout : verbose  ? stderr : NULL,
-				"# config file '%s'\n", file);
+			fprintf(check_config ? stdout : stderr, "# config file '%s'\n", file);
 	} else if (check_config) {
 		int err = errno;
 		printf("# config file '%s': %s\n", file, strerror(err));
@@ -466,6 +465,7 @@ static int do_config(const char *config)
 						ret = -2;
 					else
 						b = pop(&head);
+				default:
 					break;
 				}
 			}

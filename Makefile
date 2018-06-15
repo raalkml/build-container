@@ -1,5 +1,5 @@
 CPPFLAGS = -D_GNU_SOURCE -D'CONTAINER_DIR="."'
-CFLAGS = -ggdb -O0
+CFLAGS = -ggdb -O0 -Wall
 
 DESTDIR=
 PREFIX=/usr/local/bin
