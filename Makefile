@@ -1,10 +1,12 @@
-CPPFLAGS = -D_GNU_SOURCE -D'CONTAINER_DIR="."'
-CFLAGS = -ggdb -O0 -Wall
+CPPFLAGS = -D_GNU_SOURCE
+CFLAGS = -ggdb -O2 -pedantic -Wall
 
 DESTDIR=
 PREFIX=/usr/local/bin
 
 run-build-container: run-build-container.c
+clean:
+	$(RM) run-build-container.o run-build-container
 
 .PHONY:
 install:
