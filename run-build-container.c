@@ -134,6 +134,7 @@ static int drop_privileges(void)
 	if (privileges.home)
 		setenv("HOME", privileges.home, 1);
 	/* unsetenv("MAIL"); */
+	return 0;
 }
 
 enum arg {
