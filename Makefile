@@ -19,18 +19,18 @@ test:
 	grep config.file.\'$(abspath example)\' t/result
 	./run-build-container -n $(abspath example) -d t -c >t/result
 	grep "# cd 't'" t/result
-	BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -c >/dev/null
-	LANG=C BUILD_CONTAINER_PATH= ./run-build-container -n example -c 2>t/result || true
+	BUILD_CONTAINER_PATH=$(abspath .) $(DEBUGGER) ./run-build-container -n example -c >/dev/null
+	LANG=C BUILD_CONTAINER_PATH= $(DEBUGGER) ./run-build-container -n example -c 2>t/result || true
 	grep 'No defined path for configuration file example' t/result
-	LANG=C BUILD_CONTAINER_PATH=: ./run-build-container -n NONE -c >t/result; test $$? = 3
+	LANG=C BUILD_CONTAINER_PATH=: $(DEBUGGER) ./run-build-container -n NONE -c >t/result; test $$? = 3
 	grep 'config.file.*/NONE.*No such file' t/result
-	LANG=C BUILD_CONTAINER_PATH=~ ./run-build-container -n NONE -c >t/result; test $$? = 3
+	LANG=C BUILD_CONTAINER_PATH=~ $(DEBUGGER) ./run-build-container -n NONE -c >t/result; test $$? = 3
 	grep 'config.file.*/NONE.*No such file' t/result
-	LANG=C BUILD_CONTAINER_PATH=/etc/:~ ./run-build-container -n NONE -c >t/result; test $$? = 3
+	LANG=C BUILD_CONTAINER_PATH=/etc/:~ $(DEBUGGER) ./run-build-container -n NONE -c >t/result; test $$? = 3
 	grep 'config.file.*/NONE.*No such file' t/result
-	LANG=C BUILD_CONTAINER_PATH=/usr/etc:~/.config ./run-build-container -n NONE -c; test $$? = 3
+	LANG=C BUILD_CONTAINER_PATH=/usr/etc:~/.config $(DEBUGGER) ./run-build-container -n NONE -c; test $$? = 3
 	grep 'config.file.*/NONE.*No such file' t/result
-	LANG=C BUILD_CONTAINER_PATH=~/.config:/etc ./run-build-container -n NONE -c; test $$? = 3
+	LANG=C BUILD_CONTAINER_PATH=~/.config:/etc $(DEBUGGER) ./run-build-container -n NONE -c; test $$? = 3
 	grep 'config.file.*/NONE.*No such file' t/result
 
 
@@ -51,7 +51,7 @@ t/sudo-test1.conf:
 	echo 'from $(abspath .)'; \
 	echo 'to /usr/src'; \
 	echo 'bind'
-	BUILD_CONTAINER_PATH=$(abspath $(@D)) ./run-build-container -n $(@F) -c
+	BUILD_CONTAINER_PATH=$(abspath $(@D)) $(DEBUGGER) ./run-build-container -n $(@F) -c
 	sudo env BUILD_CONTAINER_PATH=$(abspath $(@D)) \
 	    ./run-build-container -n $(@F) -e gzip | grep Not.a.gzip
 	sudo env BUILD_CONTAINER_PATH=$(abspath $(@D)) \
@@ -67,7 +67,7 @@ t/sudo-test2.conf:
 	echo 'from mnt/gzip'; \
 	echo 'to /bin/gzip'; \
 	echo 'bind'
-	BUILD_CONTAINER_PATH=$(abspath $(@D)) ./run-build-container -n $(@F) -c
+	BUILD_CONTAINER_PATH=$(abspath $(@D)) $(DEBUGGER) ./run-build-container -n $(@F) -c
 	sudo env BUILD_CONTAINER_PATH=$(abspath $(@D)) \
 	    ./run-build-container -n $(@F) -e gzip | grep Not.a.gzip
 
@@ -78,7 +78,7 @@ t/sudo-test3.conf:
 	echo 'from /usr'; \
 	echo 'to mnt'; \
 	echo 'bind'
-	./run-build-container -n $(abspath $@) -c
+	$(DEBUGGER) ./run-build-container -n $(abspath $@) -c
 	sudo ./run-build-container -n $(abspath $@) -d $(@D)/mnt -e ls -- -d bin \
 	    |grep '^bin$$'
 

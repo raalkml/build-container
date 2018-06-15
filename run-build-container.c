@@ -384,6 +384,7 @@ static FILE *open_config(const char *config, char **config_dir)
 		strcat(file, "/");
 		strcat(file, config);
 		fp = open_config_file(file, config_dir);
+		free(file);
 		if (fp)
 			break;
 		p = next;
@@ -554,6 +555,8 @@ static int do_config(const char *config)
 		free(head);
 		head = a;
 	}
+	free(abspath_buf);
+	abspath_buf = NULL;
 	return ret;
 }
 
