@@ -551,29 +551,6 @@ static int do_config(const char *config)
 	return ret;
 }
 
-static void usage(int code)
-{
-	fprintf(stderr, "%s [-hqcL] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
-		"-h             show this text\n"
-		"-q             disable printing of program and config file names\n"
-		"-v             increase verbosity\n"
-		"-n <container> read configuration from $"BUILD_CONTAINER_PATH" if set, or from\n"
-		"               "CONTAINER_PATH"/container\n"
-		"               (instead of just unsharing namespaces).\n"
-		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
-		"-c             check configuration only, don't run anything.\n"
-		"-L             lock file system inside the container from all\n"
-		"               changes in the outside (parent) namespace, i.e. unmounts.\n"
-		"-l             passed verbatim to the <prog>\n"
-		"               (usually makes shell to act as if started as a login shell)\n"
-		"-d <dir>       change current directory to <dir> before executing <prog>\n"
-		"-P             unshare the pid namespace to avoid run-away build processes.\n"
-		"               Given twice, will also mount a new /proc in the container\n"
-		"\n",
-		build_container);
-	exit(code);
-}
-
 static int run_container(const char *cd_to, const char *prog, char **argv)
 {
 	if (drop_privileges())
@@ -638,6 +615,29 @@ static int run_pidns_container(const char *cd_to, const char *prog, char **argv)
 		return 127;
 	}
 	return 2;
+}
+
+static void usage(int code)
+{
+	fprintf(stderr, "%s [-hqcLP] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
+		"-h             show this text\n"
+		"-q             disable printing of program and config file names\n"
+		"-v             increase verbosity\n"
+		"-n <container> read configuration from $"BUILD_CONTAINER_PATH" if set, or from\n"
+		"               "CONTAINER_PATH"/container\n"
+		"               (instead of just unsharing namespaces).\n"
+		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
+		"-c             check configuration only, don't run anything.\n"
+		"-L             lock file system inside the container from all\n"
+		"               changes in the outside (parent) namespace, i.e. unmounts.\n"
+		"-l             passed verbatim to the <prog>\n"
+		"               (usually makes shell to act as if started as a login shell)\n"
+		"-d <dir>       change current directory to <dir> before executing <prog>\n"
+		"-P             unshare the pid namespace to avoid run-away build processes.\n"
+		"               Given twice, will also mount a new /proc in the container\n"
+		"\n",
+		build_container);
+	exit(code);
 }
 
 int main(int argc, char *argv[])
