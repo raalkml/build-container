@@ -10,6 +10,10 @@
 #include <wait.h>
 #include <pwd.h>
 #include <grp.h>
+#include <sys/ioctl.h>
+#include <sys/socket.h>
+#include <linux/if.h>
+#include <linux/sockios.h>
 #include <getopt.h>
 
 #ifndef BUILD_CONTAINER_PATH
@@ -24,6 +28,7 @@ static int check_config;
 static int verbose = 1;
 static int chrooted;
 static int pidns;
+static int netns;
 
 static void error(const char *fmt, ...)
 {
@@ -617,6 +622,29 @@ static int run_pidns_container(const char *cd_to, const char *prog, char **argv)
 	return 2;
 }
 
+static int setup_netns(void)
+{
+	struct ifreq ifr;
+	int skfd = socket(AF_INET, SOCK_DGRAM, 0);
+
+	if (skfd == -1) {
+		error("netns: socket: %s\n", strerror(errno));
+		return -1;
+	}
+	strcpy(ifr.ifr_name, "lo");
+	if (ioctl(skfd, SIOCGIFFLAGS, &ifr) < 0) {
+		error("netns: get interface flags: %s\n", strerror(errno));
+		return -1;
+	}
+	ifr.ifr_flags |= IFF_UP;
+	if (ioctl(skfd, SIOCSIFFLAGS, &ifr) < 0) {
+		error("netns: set interface flags: %s\n", strerror(errno));
+		return -1;
+	}
+	close(skfd);
+	return 0;
+}
+
 static void usage(int code)
 {
 	fprintf(stderr, "%s [-hqcLP] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
@@ -635,6 +663,9 @@ static void usage(int code)
 		"-d <dir>       change current directory to <dir> before executing <prog>\n"
 		"-P             unshare the pid namespace to avoid run-away build processes.\n"
 		"               Given twice, will also mount a new /proc in the container\n"
+		"-N             unshare the network namespace to allow, for instance, multiple\n"
+		"               services on the same local TCP or UNIX ports or remove network\n"
+		"               access from the build container (loopback interface will be set up)\n"
 		"\n",
 		build_container);
 	exit(code);
@@ -647,7 +678,7 @@ int main(int argc, char *argv[])
 	const char *cd_to = NULL;
 	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cLlqd:Pv")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLlqd:PNv")) != -1)
 		switch (opt) {
 		case 'h':
 			usage(0);
@@ -679,6 +710,11 @@ int main(int argc, char *argv[])
 		case 'P':
 			++pidns;
 			break;
+		case 'N':
+			++netns;
+			if (netns > 1)
+				usage(1);
+			break;
 		default:
 			usage(1);
 		}
@@ -708,12 +744,14 @@ int main(int argc, char *argv[])
 		fputc('\n', stdout);
 		exit(0);
 	}
-	if (unshare(CLONE_NEWNS) == 0) {
+	if (unshare(CLONE_NEWNS | (netns ? CLONE_NEWNET : 0)) == 0) {
 		if (mount("none", "/", NULL,
 			  MS_REC | (lock_fs ? MS_PRIVATE : MS_SLAVE), NULL) != 0) {
 			error("setting mount propagation: %s\n", strerror(errno));
 			exit(2);
 		}
+		if (netns && setup_netns() != 0)
+			exit(2);
 	} else {
 		error("unshare(CLONE_NEWNS): %s\n", strerror(errno));
 		exit(2);

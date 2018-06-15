@@ -92,3 +92,15 @@ sudo-test: t/sudo-test1.conf t/sudo-test2.conf t/sudo-test3.conf
 	# pid namespace, own proc fs
 	sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -e grep -PP -- \
 	    '^PPid:[[:space:]]\+0[[:space:]]*$$' /proc/self/status
+	# network namespace, loopback up
+	sudo BUILD_CONTAINER_PATH=$(abspath .) sh -c 'set -x; PATH="$(abspath .):$$PATH"; \
+	run-build-container -n example -N -e ping -- -nc1 127.0.0.1 || exit 1; \
+	run-build-container -n example -P -N -e ping -- -nc1 127.0.0.1 || exit 1; \
+	run-build-container -n example -PP -N -e ping -- -nc1 127.0.0.1 || exit 1; \
+	if [ $$(ip -oneline link |wc -l) = 1 ]; then \
+	test $$(run-build-container -n example -qN -e ip -- -oneline link |wc -l) = 1 || exit 1; \
+	fi; \
+	if [ $$(ss -Hatux |wc -l) -gt 0 ]; then \
+	test $$(run-build-container -n example -qN -e ss -- -Hatux |wc -l) = 0 || exit 1; \
+	fi; \
+	exit 0'
