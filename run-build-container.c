@@ -29,6 +29,10 @@ static int verbose = 1;
 static int chrooted;
 static int pidns;
 static int netns;
+static char default_overlay_opts[] = "index=off,xino=off,";
+static char default_union_opts[] = "xino=off,";
+static char *overlay_opts = default_overlay_opts;
+static char *union_opts = default_union_opts;
 
 static void error(const char *fmt, ...)
 {
@@ -475,8 +479,9 @@ static int do_config(const char *config)
 				error("'union' expects exactly one 'to' path "
 				      "and at least one from\n");
 			} else {
-				char *data = malloc(sizeof("lowerdir") + lowersize);
-				strcpy(data, "lowerdir=");
+				char *data = malloc(strlen(union_opts) + sizeof("lowerdir") + lowersize);
+				strcpy(data, union_opts);
+				strcat(data, "lowerdir=");
 				for (e = a; e; e = e->next) {
 					strcat(data, e->val);
 					if (e->next)
@@ -526,11 +531,12 @@ static int do_config(const char *config)
 				error("'overlay' expects exactly one 'work', two 'from', "
 				      "and one 'to' path lines\n");
 			} else {
-				char *data = malloc(sizeof("lowerdir=,upperdir=,workdir=") + 
+				char *data = malloc(strlen(overlay_opts) +
+						    sizeof("lowerdir=,upperdir=,workdir=") +
 						    strlen(a->val) + strlen(a->next->val) +
 						    strlen(b->val) + strlen(w->val));
-				sprintf(data, "upperdir=%s,lowerdir=%s,workdir=%s",
-					a->val, a->next->val, w->val);
+				sprintf(data, "%supperdir=%s,lowerdir=%s,workdir=%s",
+					overlay_opts, a->val, a->next->val, w->val);
 				ret = do_mount("overlay", b->val, "overlay", 0, data, arg);
 				free(data);
 			}
