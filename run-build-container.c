@@ -289,6 +289,8 @@ static int do_mount_options(unsigned long *opts, char *arg)
 	while (!at_line_terminator(arg)) {
 		unsigned i;
 		arg += strspn(arg, spaces);
+		if (!*arg)
+			break;
 		for (i = 0; generic_mount_opts[i].key; ++i)
 			if (expect_id(generic_mount_opts[i].key, &arg)) {
 				*opts |= generic_mount_opts[i].flags;
