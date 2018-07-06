@@ -14,7 +14,7 @@ move
 from t/union-top
 from t/union-bottom
 to t/mnt3
-union
+union xino=off index=off ro
 
 # A r/w overlay
 # The order of `from` lines is meaningful! (top-down)
@@ -23,7 +23,7 @@ from t/mnt4/top
 from t/mnt4/bottom
 work t/mnt4/wrk
 to t/mnt4/mnt
-overlay
+overlay xino=auto index=off
 
 # A r/o overlay
 # The order of `from` lines is meaningful! (top-down)
@@ -32,7 +32,7 @@ from t/mnt5/top
 from t/mnt5/bottom
 work t/mnt5/wrk
 to t/mnt5/mnt
-overlay
+overlay xino=auto index=off ro
 
 # chroot(2)
 # chroot t/mnt4

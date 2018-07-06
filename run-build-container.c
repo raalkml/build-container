@@ -252,11 +252,59 @@ static const struct dict_element generic_mount_opts[] = {
 	{ NULL }
 };
 
+int finddict(const struct dict_element *dict, char *word, int *num, int *len)
+{
+	int i;
+	for (i = 0; dict[i].key; ++i) {
+		if (strcmp(dict[i].key, word) == 0) {
+			*num = i;
+			*len = strlen(dict[i].key);
+			return 1;
+		}
+	}
+	*num = -1;
+	*len = strlen(word);
+	return 0;
+}
+
 static void split_args(char *str, const struct dict_element *dict, char **known, char **others)
 {
-	// TODO
-	*known = str;
-	*others = strend(str);
+	static const char delim[] = "\x20\t\r\n";
+	const char service_delim = '\x7f';
+	int init_string_len = strlen(str);
+	int i = 0;
+	char *saveptr;
+	int dict_pos = 0;
+	char *tokistr;
+
+	tokistr = saveptr = str;
+	while (tokistr) {
+		int tokistr_len = 0;
+		tokistr = strtok_r(saveptr, delim, &saveptr);
+		if (!tokistr)
+			break;
+		if (finddict(dict, tokistr, &dict_pos, &tokistr_len)) {
+			memmove(str + i + tokistr_len + 1, str + i, tokistr - i - str);
+			memmove(str + i, dict[dict_pos].key, tokistr_len);
+			str[i + tokistr_len] = service_delim;
+			i += tokistr_len + 1;
+			continue;
+		}
+		if (saveptr < str + init_string_len)
+			tokistr[tokistr_len] = service_delim;
+		else {
+			str[init_string_len] = '\0';
+			break;
+		}
+	}
+
+	int l = strlen(str);
+	if (str[i])
+		str[i++] = '\0';
+	*others = str + i;
+	for (i = 0; i < l; i++)
+		if (str[i] == service_delim)
+			str[i] = delim[0];
 }
 
 static void args_to_mount_opts(char *args)
