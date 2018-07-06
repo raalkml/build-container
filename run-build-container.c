@@ -429,10 +429,159 @@ static FILE *open_config(const char *config, char **config_dir)
 	return fp;
 }
 
+static int do_config_bind(struct stk **head, char *arg)
+{
+	int ret;
+	struct stk *b = pop(head);
+	struct stk *a = pop(head);
+	if (a && a->arg != FROM)
+		swap(a, b);
+	if (a && b && a->arg == FROM && b->arg == TO)
+		ret = do_mount(a->val, b->val, NULL, MS_BIND, NULL, arg);
+	else {
+		error("'bind' expects 'from' and 'to' paths\n");
+		ret = -1;
+	}
+	free(a);
+	free(b);
+	return ret;
+}
+
+static int do_config_move(struct stk **head, char *arg)
+{
+	int ret;
+	struct stk *b = pop(head);
+	struct stk *a = pop(head);
+	if (a && a->arg != FROM)
+		swap(a, b);
+	if (a && b && a->arg == FROM && b->arg == TO)
+		ret = do_mount(a->val, b->val, NULL, MS_MOVE, NULL, arg);
+	else {
+		error("'move' expects 'from' and 'to' paths\n");
+		ret = -1;
+	}
+	free(a);
+	free(b);
+	return ret;
+}
+
+static int do_config_union(struct stk **head, char *arg)
+{
+	int ret = 0;
+	struct stk *a = NULL, *b = NULL, *e;
+	/* collect all 'from' paths and exactly one 'to' */
+	size_t lowersize = 0;
+
+	while (*head) {
+		switch ((*head)->arg) {
+		case FROM:
+			e = pop(head);
+			lowersize += strlen(e->val) + 1;
+			e->next = a;
+			a = e;
+			break;
+		case TO:
+			if (b)
+				ret = -2;
+			else
+				b = pop(head);
+		default:
+			break;
+		}
+	}
+	if (ret == -2 || !a || !b) {
+		ret = -1;
+		error("'union' expects exactly one 'to' path "
+		      "and at least one from\n");
+	} else {
+		char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
+		split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
+		if (!*ovl_opts)
+			ovl_opts = union_opts;
+		data = malloc(strlen(ovl_opts) + 1 + sizeof("lowerdir") + lowersize);
+		strcpy(data, ovl_opts);
+		strcat(data, ",lowerdir=" + (!*data || *strlast(data) == ','));
+		for (e = a; e; e = e->next) {
+			strcat(data, e->val);
+			if (e->next)
+				strcat(data, ":");
+		}
+		ret = do_mount("union", b->val, "overlay", 0, data, mnt_opts);
+		free(data);
+	}
+	free(b);
+	while (a) {
+		e = a->next;
+		free(a);
+		a = e;
+	}
+	return ret;
+}
+
+static int do_config_overlay(struct stk **head, char *arg)
+{
+	int ret = 0;
+	struct stk *a = NULL, *b = NULL, *w = NULL, *e;
+	/* collect one 'work', two 'from' paths, and exactly one 'to' */
+	while (*head && ret == 0 && !(a && a->next && b && w)) {
+		switch ((*head)->arg) {
+		case WORK:
+			if (w)
+				ret = -2;
+			else
+				w = pop(head);
+			break;
+		case FROM:
+			if (a && a->next)
+				ret = -2;
+			else {
+				e = pop(head);
+				e->next = a;
+				a = e;
+			}
+			break;
+		case TO:
+			if (b)
+				ret = -2;
+			else
+				b = pop(head);
+			break;
+		}
+	}
+	if (ret == -2 || !(a && a->next) || !b || !w) {
+		ret = -1;
+		error("'overlay' expects exactly one 'work', two 'from', "
+		      "and one 'to' path lines\n");
+	} else {
+		char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
+		split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
+		if (!*ovl_opts)
+			ovl_opts = overlay_opts;
+		data = malloc(strlen(ovl_opts) +
+			      sizeof("lowerdir=,upperdir=,workdir=") +
+			      strlen(a->val) + strlen(a->next->val) +
+			      strlen(b->val) + strlen(w->val));
+		sprintf(data, "%s%supperdir=%s,lowerdir=%s,workdir=%s",
+			ovl_opts,
+			"," + (!*ovl_opts || *strlast(ovl_opts) == ','),
+			a->val, a->next->val, w->val);
+		ret = do_mount("overlay", b->val, "overlay", 0, data, mnt_opts);
+		free(data);
+	}
+	free(w);
+	free(b);
+	while (a) {
+		e = a->next;
+		free(a);
+		a = e;
+	}
+	return ret;
+}
+
 static int do_config(const char *config)
 {
 	char line[BUFSIZ];
-	struct stk *head = NULL, *a, *b;
+	struct stk *head = NULL;
 	int ret = 0;
 	char *config_dir;
 	FILE *fp = open_config(config, &config_dir);
@@ -456,150 +605,23 @@ static int do_config(const char *config)
 			push(&head, TO, abspath(config_dir, cleanup(arg)));
 		else if (expect_id("work", &arg))
 			push(&head, WORK, abspath(config_dir, cleanup(arg)));
-		else if (expect_id("bind", &arg)) {
-			b = pop(&head);
-			a = pop(&head);
-			if (a && a->arg != FROM)
-				swap(a, b);
-			if (a && b && a->arg == FROM && b->arg == TO)
-				ret = do_mount(a->val, b->val, NULL, MS_BIND, NULL, arg);
-			else {
-				error("'bind' expects 'from' and 'to' paths\n");
-				ret = -1;
-			}
-			free(a);
-			free(b);
-		}
-		else if (expect_id("move", &arg)) {
-			b = pop(&head);
-			a = pop(&head);
-			if (a && a->arg != FROM)
-				swap(a, b);
-			if (a && b && a->arg == FROM && b->arg == TO)
-				ret = do_mount(a->val, b->val, NULL, MS_MOVE, NULL, arg);
-			else {
-				error("'move' expects 'from' and 'to' paths\n");
-				ret = -1;
-			}
-			free(a);
-			free(b);
-		}
-		else if (expect_id("union", &arg)) {
-			struct stk *e;
-			/* collect all 'from' paths and exactly one 'to' */
-			size_t lowersize = 0;
-			a = b = NULL;
-			while (head) {
-				switch (head->arg) {
-				case FROM:
-					e = pop(&head);
-					lowersize += strlen(e->val) + 1;
-					e->next = a;
-					a = e;
-					break;
-				case TO:
-					if (b)
-						ret = -2;
-					else
-						b = pop(&head);
-				default:
-					break;
-				}
-			}
-			if (ret == -2 || !a || !b) {
-				ret = -1;
-				error("'union' expects exactly one 'to' path "
-				      "and at least one from\n");
-			} else {
-				char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
-				split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
-				if (!*ovl_opts)
-					ovl_opts = union_opts;
-				data = malloc(strlen(ovl_opts) + 1 + sizeof("lowerdir") + lowersize);
-				strcpy(data, ovl_opts);
-				strcat(data, ",lowerdir=" + (!*data || *strlast(data) == ','));
-				for (e = a; e; e = e->next) {
-					strcat(data, e->val);
-					if (e->next)
-						strcat(data, ":");
-				}
-				ret = do_mount("union", b->val, "overlay", 0, data, mnt_opts);
-				free(data);
-			}
-			free(b);
-			while (a) {
-				e = a->next;
-				free(a);
-				a = e;
-			}
-		}
-		else if (expect_id("overlay", &arg)) {
-			struct stk *e, *w;
-			/* collect one 'work', two 'from' paths, and exactly one 'to' */
-			w = a = b = NULL;
-			while (head && ret == 0 && !(a && a->next && b && w)) {
-				switch (head->arg) {
-				case WORK:
-					if (w)
-						ret = -2;
-					else
-						w = pop(&head);
-					break;
-				case FROM:
-					if (a && a->next)
-						ret = -2;
-					else {
-						e = pop(&head);
-						e->next = a;
-						a = e;
-					}
-					break;
-				case TO:
-					if (b)
-						ret = -2;
-					else
-						b = pop(&head);
-					break;
-				}
-			}
-			if (ret == -2 || !(a && a->next) || !b || !w) {
-				ret = -1;
-				error("'overlay' expects exactly one 'work', two 'from', "
-				      "and one 'to' path lines\n");
-			} else {
-				char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
-				split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
-				if (!*ovl_opts)
-					ovl_opts = overlay_opts;
-				data = malloc(strlen(ovl_opts) +
-					      sizeof("lowerdir=,upperdir=,workdir=") +
-					      strlen(a->val) + strlen(a->next->val) +
-					      strlen(b->val) + strlen(w->val));
-				sprintf(data, "%s%supperdir=%s,lowerdir=%s,workdir=%s",
-					ovl_opts,
-					"," + (!*ovl_opts || *strlast(ovl_opts) == ','),
-					a->val, a->next->val, w->val);
-				ret = do_mount("overlay", b->val, "overlay", 0, data, mnt_opts);
-				free(data);
-			}
-			free(w);
-			free(b);
-			while (a) {
-				e = a->next;
-				free(a);
-				a = e;
-			}
-		}
-		else if (expect_id("chroot", &arg)) {
+		else if (expect_id("bind", &arg))
+			ret = do_config_bind(&head, arg);
+		else if (expect_id("move", &arg))
+			ret = do_config_move(&head, arg);
+		else if (expect_id("union", &arg))
+			ret = do_config_union(&head, arg);
+		else if (expect_id("overlay", &arg))
+			ret = do_config_overlay(&head, arg);
+		else if (expect_id("chroot", &arg))
 			ret = do_chroot(abspath(config_dir, cleanup(arg)));
-		}
 		if (ret)
 			break;
 	}
 	fclose(fp);
 	free(config_dir);
 	while (head) {
-		a = head->next;
+		struct stk *a = head->next;
 		free(head);
 		head = a;
 	}
