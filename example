@@ -11,18 +11,27 @@ move
 # A r/o union
 # The order of `from` lines is meaningful! (top-down)
 # More than two `from` lines allowed.
-from union-top
-from union-bottom
+from t/union-top
+from t/union-bottom
 to t/mnt3
 union
 
 # A r/w overlay
 # The order of `from` lines is meaningful! (top-down)
 # Exactly two `from`, one `work` and one `to` lines.
-from union-top
-from union-bottom
-work t/mnt1
-to t/mnt4
+from t/mnt4/top
+from t/mnt4/bottom
+work t/mnt4/wrk
+to t/mnt4/mnt
+overlay
+
+# A r/o overlay
+# The order of `from` lines is meaningful! (top-down)
+# Exactly two `from`, one `work` and one `to` lines.
+from t/mnt5/top
+from t/mnt5/bottom
+work t/mnt5/wrk
+to t/mnt5/mnt
 overlay
 
 # chroot(2)

@@ -12,9 +12,16 @@ clean:
 install:
 	install -m4755 -oroot run-build-container '$(DESTDIR)$(PREFIX)/'
 
+define setup-test
+	mkdir -p t/mnt4/mnt t/mnt4/top t/mnt4/bottom t/mnt4/wrk t/mnt5/mnt t/mnt5/top t/mnt5/bottom t/mnt5/wrk
+	mkdir -p t/union-top t/union-bottom
+	echo TOP >t/union-top/file
+	echo BOTTOM >t/union-bottom/file
+endef
+
 .PHONY: test
 test:
-	mkdir -p t/mnt1 t/mnt2 t/mnt3 t/mnt4
+	$(setup-test)
 	./run-build-container -n $(abspath example) -c >t/result
 	grep config.file.\'$(abspath example)\' t/result
 	./run-build-container -n $(abspath example) -d t -c >t/result
@@ -83,7 +90,7 @@ t/sudo-test3.conf:
 	    |grep '^bin$$'
 
 sudo-test: t/sudo-test1.conf t/sudo-test2.conf t/sudo-test3.conf
-	mkdir -p t/mnt4
+	$(setup-test)
 	# no pid namespace
 	sleep 2 & pid=$$!; \
 	sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -e kill -- -0 $$pid
