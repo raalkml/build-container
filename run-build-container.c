@@ -235,6 +235,20 @@ static char *cleanup(char *s)
 	return s;
 }
 
+struct dict_element
+{
+	const char *key;
+	unsigned long flags;
+};
+static const struct dict_element generic_mount_opts[] = {
+	{ "rec", MS_REC },
+	{ "noexec", MS_NOEXEC },
+	{ "nosuid", MS_NOSUID },
+	{ "nodev", MS_NODEV },
+	{ "ro", MS_RDONLY },
+	{ NULL }
+};
+
 static char *abspath_buf;
 static const char *abspath(const char *dir, const char *name)
 {
@@ -263,19 +277,15 @@ static int do_mount_options(unsigned long *opts, char *arg)
 {
 	arg = cleanup(arg);
 	while (!at_line_terminator(arg)) {
+		unsigned i;
 		arg += strspn(arg, spaces);
-		if (expect_id("rec", &arg))
-			*opts |= MS_REC;
-		else if (expect_id("noexec", &arg))
-			*opts |= MS_NOEXEC;
-		else if (expect_id("nosuid", &arg))
-			*opts |= MS_NOSUID;
-		else if (expect_id("nodev", &arg))
-			*opts |= MS_NODEV;
-		else if (expect_id("ro", &arg))
-			*opts |= MS_RDONLY;
-		else {
-			error("syntax error: mount option unsupported: %s\n", arg);
+		for (i = 0; generic_mount_opts[i].key; ++i)
+			if (expect_id(generic_mount_opts[i].key, &arg)) {
+				*opts |= generic_mount_opts[i].flags;
+				break;
+			}
+		if (!generic_mount_opts[i].key) {
+			error("syntax error: mount option not supported: %s\n", arg);
 			return -1;
 		}
 	}
