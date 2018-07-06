@@ -310,7 +310,7 @@ static int do_mount(char *src, char *tgt, const char *fstype,
 	if (do_mount_options(&opts, args) != 0)
 		return -1;
 	if (check_config) {
-		printf("# mount %s %s %s 0x%lx%s %s\n",
+		printf("# mount '%s' '%s' %s 0x%lx%s '%s'\n",
 		       src, tgt, fstype, flags | opts,
 		       flags & MS_BIND ? " bind" :
 		       flags & MS_MOVE ? " move" : "",
