@@ -259,6 +259,21 @@ static void split_args(char *str, const struct dict_element *dict, char **known,
 	*others = strend(str);
 }
 
+static void args_to_mount_opts(char *args)
+{
+	char *o = args;
+	args += strspn(args, spaces);
+	while (*args) {
+		if (strchr(spaces, *args)) {
+			args += strspn(args, spaces);
+			*o++ = ',';
+			continue;
+		}
+		*o++ = *args++;
+	}
+	*o = '\0';
+}
+
 static char *abspath_buf;
 static const char *abspath(const char *dir, const char *name)
 {
@@ -500,7 +515,9 @@ static int do_config_union(struct stk **head, char *arg)
 	} else {
 		char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
 		split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
-		if (!*ovl_opts)
+		if (*ovl_opts)
+			args_to_mount_opts(ovl_opts);
+		else
 			ovl_opts = union_opts;
 		data = malloc(strlen(ovl_opts) + 1 + sizeof("lowerdir") + lowersize);
 		strcpy(data, ovl_opts);
@@ -559,7 +576,9 @@ static int do_config_overlay(struct stk **head, char *arg)
 	} else {
 		char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
 		split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
-		if (!*ovl_opts)
+		if (*ovl_opts)
+			args_to_mount_opts(ovl_opts);
+		else
 			ovl_opts = overlay_opts;
 		data = malloc(strlen(ovl_opts) +
 			      sizeof("lowerdir=,upperdir=,workdir=") +
