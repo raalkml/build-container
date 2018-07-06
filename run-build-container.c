@@ -177,6 +177,7 @@ static struct stk *pop(struct stk **head)
 #define swap(a, b) do { typeof(a) _t = b; b = a; a = _t; } while (0)
 
 static char spaces[] = "\x20\t\r";
+static char empty_str[] = "";
 
 static int at_line_terminator(const char *s)
 {
@@ -248,6 +249,13 @@ static const struct dict_element generic_mount_opts[] = {
 	{ "ro", MS_RDONLY },
 	{ NULL }
 };
+
+static void split_args(char *str, const struct dict_element *dict, char **known, char **others)
+{
+	// TODO
+	*known = str;
+	*others = strend(str);
+}
 
 static char *abspath_buf;
 static const char *abspath(const char *dir, const char *name)
@@ -503,15 +511,19 @@ static int do_config(const char *config)
 				error("'union' expects exactly one 'to' path "
 				      "and at least one from\n");
 			} else {
-				char *data = malloc(strlen(union_opts) + sizeof("lowerdir") + lowersize);
-				strcpy(data, union_opts);
-				strcat(data, "lowerdir=");
+				char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
+				split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
+				if (!*ovl_opts)
+					ovl_opts = union_opts;
+				data = malloc(strlen(ovl_opts) + 1 + sizeof("lowerdir") + lowersize);
+				strcpy(data, ovl_opts);
+				strcat(data, ",lowerdir=" + (!*data || *strlast(data) == ','));
 				for (e = a; e; e = e->next) {
 					strcat(data, e->val);
 					if (e->next)
 						strcat(data, ":");
 				}
-				ret = do_mount("union", b->val, "overlay", 0, data, arg);
+				ret = do_mount("union", b->val, "overlay", 0, data, mnt_opts);
 				free(data);
 			}
 			free(b);
@@ -555,13 +567,19 @@ static int do_config(const char *config)
 				error("'overlay' expects exactly one 'work', two 'from', "
 				      "and one 'to' path lines\n");
 			} else {
-				char *data = malloc(strlen(overlay_opts) +
-						    sizeof("lowerdir=,upperdir=,workdir=") +
-						    strlen(a->val) + strlen(a->next->val) +
-						    strlen(b->val) + strlen(w->val));
-				sprintf(data, "%supperdir=%s,lowerdir=%s,workdir=%s",
-					overlay_opts, a->val, a->next->val, w->val);
-				ret = do_mount("overlay", b->val, "overlay", 0, data, arg);
+				char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
+				split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
+				if (!*ovl_opts)
+					ovl_opts = overlay_opts;
+				data = malloc(strlen(ovl_opts) +
+					      sizeof("lowerdir=,upperdir=,workdir=") +
+					      strlen(a->val) + strlen(a->next->val) +
+					      strlen(b->val) + strlen(w->val));
+				sprintf(data, "%s%supperdir=%s,lowerdir=%s,workdir=%s",
+					ovl_opts,
+					"," + (!*ovl_opts || *strlast(ovl_opts) == ','),
+					a->val, a->next->val, w->val);
+				ret = do_mount("overlay", b->val, "overlay", 0, data, mnt_opts);
 				free(data);
 			}
 			free(w);
