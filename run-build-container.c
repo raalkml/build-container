@@ -193,6 +193,20 @@ static int is_absolute(const char *path)
 	return path && '/' == *path;
 }
 
+static char *strend(const char *s)
+{
+	if (s)
+		s += strlen(s);
+	return (char *)s;
+}
+static char *strlast(const char *s)
+{
+	char *e = strend(s);
+	if (e > s)
+		--e;
+	return e;
+}
+
 static int expect_id(const char *sym, char **s)
 {
 	char *p = *s;
@@ -239,7 +253,7 @@ static const char *abspath(const char *dir, const char *name)
 	if (newsize > size)
 		abspath_buf = realloc(abspath_buf, size = newsize);
 	strcpy(abspath_buf, dir);
-	if (abspath_buf[strlen(abspath_buf) - 1] != '/')
+	if (*strlast(abspath_buf) != '/')
 		strcat(abspath_buf, "/");
 	strcat(abspath_buf, name);
 	return abspath_buf;
@@ -322,7 +336,7 @@ static FILE *open_config_file(const char *file, char **dir)
 	FILE *fp = fopen(file, "r");
 
 	if (fp) {
-		const char *e = file + strlen(file);
+		const char *e = strend(file);
 
 		while (e > file)
 			if ('/' == *--e)
