@@ -241,12 +241,14 @@ struct dict_element
 	const char *key;
 	unsigned long flags;
 };
+
 static const struct dict_element generic_mount_opts[] = {
 	{ "rec", MS_REC },
 	{ "noexec", MS_NOEXEC },
 	{ "nosuid", MS_NOSUID },
 	{ "nodev", MS_NODEV },
 	{ "ro", MS_RDONLY },
+	{ "rw", 0 },
 	{ NULL }
 };
 
