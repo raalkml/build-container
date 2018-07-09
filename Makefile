@@ -1,3 +1,6 @@
+override TOP_MAKEFILE := $(abspath $(lastword $(MAKEFILE_LIST)))
+export TOP_MAKEFILE_DIR := $(dir $(TOP_MAKEFILE))
+
 CPPFLAGS = -D_GNU_SOURCE
 CFLAGS = -ggdb -O2 -pedantic -Wall
 
@@ -12,104 +15,19 @@ clean:
 install:
 	install -m4755 -oroot run-build-container '$(DESTDIR)$(PREFIX)/'
 
-define setup-test
-	mkdir -p t/mnt4/mnt t/mnt4/top t/mnt4/bottom t/mnt4/wrk t/mnt5/mnt t/mnt5/top t/mnt5/bottom t/mnt5/wrk
-	mkdir -p t/union-top t/union-bottom
-	echo TOP >t/union-top/file
-	echo BOTTOM >t/union-bottom/file
-endef
-
-.PHONY: test
-test:
-	$(setup-test)
-	./run-build-container -n $(abspath example) -c >t/result
-	grep config.file.\'$(abspath example)\' t/result
-	./run-build-container -n $(abspath example) -d t -c >t/result
-	grep "# cd 't'" t/result
-	BUILD_CONTAINER_PATH=$(abspath .) $(DEBUGGER) ./run-build-container -n example -c >/dev/null
-	LANG=C BUILD_CONTAINER_PATH= $(DEBUGGER) ./run-build-container -n example -c 2>t/result || true
-	grep 'No defined path for configuration file example' t/result
-	LANG=C BUILD_CONTAINER_PATH=: $(DEBUGGER) ./run-build-container -n NONE -c >t/result; test $$? = 3
-	grep 'config.file.*/NONE.*No such file' t/result
-	LANG=C BUILD_CONTAINER_PATH=~ $(DEBUGGER) ./run-build-container -n NONE -c >t/result; test $$? = 3
-	grep 'config.file.*/NONE.*No such file' t/result
-	LANG=C BUILD_CONTAINER_PATH=/etc/:~ $(DEBUGGER) ./run-build-container -n NONE -c >t/result; test $$? = 3
-	grep 'config.file.*/NONE.*No such file' t/result
-	LANG=C BUILD_CONTAINER_PATH=/usr/etc:~/.config $(DEBUGGER) ./run-build-container -n NONE -c; test $$? = 3
-	grep 'config.file.*/NONE.*No such file' t/result
-	LANG=C BUILD_CONTAINER_PATH=~/.config:/etc $(DEBUGGER) ./run-build-container -n NONE -c; test $$? = 3
-	grep 'config.file.*/NONE.*No such file' t/result
+.PHONY: test tests FORCE
+test: $(sort $(wildcard tests/t[0-9][0-9][0-9][0-9]*.sh))
 
 
-.PHONY: t/sudo-test1.conf
-t/sudo-test1.conf:
-	mkdir -p $(addprefix $(@D)/,bin mnt mnt1 mnt2 mnt3)
-	echo '#!/bin/sh' >$(@D)/mnt/gzip
-	echo 'echo Not a gzip' >>$(@D)/mnt/gzip
-	chmod +x $(@D)/mnt/gzip
-	exec >$@; \
-	echo 'from mnt'; \
-	echo 'from /bin'; \
-	echo 'to bin'; \
-	echo 'union'; \
-	echo 'from bin'; \
-	echo 'to /bin'; \
-	echo 'move'; \
-	echo 'from $(abspath .)'; \
-	echo 'to /usr/src'; \
-	echo 'bind'
-	BUILD_CONTAINER_PATH=$(abspath $(@D)) $(DEBUGGER) ./run-build-container -n $(@F) -c
-	sudo env BUILD_CONTAINER_PATH=$(abspath $(@D)) \
-	    ./run-build-container -n $(@F) -e gzip | grep Not.a.gzip
-	sudo env BUILD_CONTAINER_PATH=$(abspath $(@D)) \
-	    ./run-build-container -n $(@F) -e ls -- /usr/src |grep run-build-container
+TEST_VERBOSE := false
+TEST_AUTOCLEAN := true
+TEST_SRC_DIR := $(abspath $(TOP_MAKEFILE_DIR))
+TEST_DIR := $(TOP_MAKEFILE_DIR)/t
+TEST_PATH := $(TEST_SRC_DIR):${PATH}
+export TEST_SRC_DIR TEST_DIR TEST_PATH TEST_VERBOSE
 
-.PHONY: t/sudo-test2.conf
-t/sudo-test2.conf:
-	mkdir -p $(addprefix $(@D)/,bin mnt mnt1 mnt2 mnt3)
-	echo '#!/bin/sh' >$(@D)/mnt/gzip
-	echo 'echo Not a gzip' >>$(@D)/mnt/gzip
-	chmod +x $(@D)/mnt/gzip
-	exec >$@; \
-	echo 'from mnt/gzip'; \
-	echo 'to /bin/gzip'; \
-	echo 'bind'
-	BUILD_CONTAINER_PATH=$(abspath $(@D)) $(DEBUGGER) ./run-build-container -n $(@F) -c
-	sudo env BUILD_CONTAINER_PATH=$(abspath $(@D)) \
-	    ./run-build-container -n $(@F) -e gzip | grep Not.a.gzip
-
-.PHONY: t/sudo-test3.conf
-t/sudo-test3.conf:
-	mkdir -p $(addprefix $(@D)/,mnt)
-	exec >$@; \
-	echo 'from /usr'; \
-	echo 'to mnt'; \
-	echo 'bind'
-	$(DEBUGGER) ./run-build-container -n $(abspath $@) -c
-	sudo ./run-build-container -n $(abspath $@) -d $(@D)/mnt -e ls -- -d bin \
-	    |grep '^bin$$'
-
-sudo-test: t/sudo-test1.conf t/sudo-test2.conf t/sudo-test3.conf
-	$(setup-test)
-	# no pid namespace
-	sleep 2 & pid=$$!; \
-	sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -e kill -- -0 $$pid
-	# pid namespace, parent proc fs
-	sleep 2 & pid=$$!; \
-	test $$(sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -e cat -P -- /proc/$$pid/comm) = sleep
-	test $$(sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -P -- -c 'echo $$$$') = 1
-	# pid namespace, own proc fs
-	sudo BUILD_CONTAINER_PATH=$(abspath .) ./run-build-container -n example -e grep -PP -- \
-	    '^PPid:[[:space:]]\+0[[:space:]]*$$' /proc/self/status
-	# network namespace, loopback up
-	sudo BUILD_CONTAINER_PATH=$(abspath .) sh -c 'set -x; PATH="$(abspath .):$$PATH"; \
-	run-build-container -n example -N -e ping -- -nc1 127.0.0.1 || exit 1; \
-	run-build-container -n example -P -N -e ping -- -nc1 127.0.0.1 || exit 1; \
-	run-build-container -n example -PP -N -e ping -- -nc1 127.0.0.1 || exit 1; \
-	if [ $$(ip -oneline link |wc -l) = 1 ]; then \
-	test $$(run-build-container -n example -qN -e ip -- -oneline link |wc -l) = 1 || exit 1; \
-	fi; \
-	if [ $$(ss -Hatux |wc -l) -gt 0 ]; then \
-	test $$(run-build-container -n example -qN -e ss -- -Hatux |wc -l) = 0 || exit 1; \
-	fi; \
-	exit 0'
+tests/t%.sh: FORCE
+	@echo; echo Running \"$@\"; echo
+	@if $(TEST_AUTOCLEAN);then rm -rf "$(abspath $(TEST_DIR))/$(@F)";fi;mkdir -p "$(abspath $(TEST_DIR))/$(@F)"
+	. $(@D)/common.sh; cd "$(abspath $(TEST_DIR))/$(@F)" && exec "$(abspath $@)" < /dev/null
+	@$(TEST_AUTOCLEAN) && rm -rf "$(abspath $(TEST_DIR))/$(@F)"
