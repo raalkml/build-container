@@ -253,11 +253,101 @@ static const struct dict_element generic_mount_opts[] = {
 	{ NULL }
 };
 
-static void split_args(char *str, const struct dict_element *dict, char **known, char **others)
+static inline int is_delimiter(const char *s)
 {
-	// TODO
-	*known = str;
-	*others = strend(str);
+	return *s && strchr(spaces_lf, *s);
+}
+
+static inline void swap_char(char *a, char *b)
+{
+	char t = *b;
+	*b = *a;
+	*a = t;
+}
+
+static inline void reverse(char *s, char *e)
+{
+	if (e - s < 2)
+		return;
+	while (s < --e)
+		swap_char(e, s++);
+}
+
+static int in_dictionary(const struct dict_element *dictionary, const char *word, int len)
+{
+	if (!len)
+		return 0;
+	while (dictionary->key) {
+		if (strncmp(dictionary->key, word, len) == 0)
+			return 1;
+		++dictionary;
+	}
+	return 0;
+}
+
+static void split_args(char *buffer, const struct dict_element *dictionary, char **k, char **u)
+{
+	char *buffer_end = buffer + strlen(buffer);
+	char *b = buffer;
+	char *e = buffer_end;
+
+	*k = e;
+	*u = e;
+	while (b < e) {
+		/* select a word */
+		char *ab = b, *ae, *ne;
+		for (ae = ab; ae < e && !is_delimiter(ae);)
+			++ae;
+		/* find the trailing delimiters */
+		for (ne = ae; ne < e && is_delimiter(ne);)
+			++ne;
+		if (ab == ae) { /* empty word (string starting with delimiters) */
+			b = ne;
+			continue;
+		}
+		if (in_dictionary(dictionary, ab, ae - ab)) {
+			/* known word, leave it and its delimiters in place */
+			b = ne;
+			continue;
+		}
+		/* move the word to the end of buffer */
+		int len = ne - ab;
+		reverse(ab, e);
+		reverse(e - len + (ne - ae), e);
+		reverse(ab, e - len);
+		b = ab;
+		e -= len;
+	}
+	if (e > buffer)
+		*k = buffer;
+	/* finalize: terminate the known words and reverse the others */
+	if (e != buffer_end)
+		while (e > buffer) {
+			if (is_delimiter(e)) {
+				*e++ = '\0';
+				break;
+			}
+			--e;
+		}
+	*u = e;
+	/*
+	 * Note: can finish here if the order of unknown words is not
+	 * important.
+	 */
+	b = e;
+	reverse(b, buffer_end);
+	while (b < buffer_end) {
+		char *ab = b;
+		while (ab < buffer_end && is_delimiter(ab))
+			++ab;
+		if (ab == buffer_end)
+			break;
+		char *ae = ab;
+		while (ae < buffer_end && !is_delimiter(ae))
+			++ae;
+		reverse(ab, ae);
+		b = ae;
+	}
 }
 
 static void args_to_mount_data(char *args)
@@ -515,6 +605,7 @@ static int do_config_union(struct stk **head, char *arg)
 		      "and at least one from\n");
 	} else {
 		char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
+		arg = cleanup(arg);
 		split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
 		if (*ovl_opts)
 			args_to_mount_data(ovl_opts);
@@ -576,6 +667,7 @@ static int do_config_overlay(struct stk **head, char *arg)
 		      "and one 'to' path lines\n");
 	} else {
 		char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
+		arg = cleanup(arg);
 		split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
 		if (*ovl_opts)
 			args_to_mount_data(ovl_opts);
