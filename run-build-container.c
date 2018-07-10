@@ -177,6 +177,7 @@ static struct stk *pop(struct stk **head)
 #define swap(a, b) do { typeof(a) _t = b; b = a; a = _t; } while (0)
 
 static char spaces[] = "\x20\t\r";
+static char spaces_lf[] = "\x20\t\r\n";
 static char empty_str[] = "";
 
 static int at_line_terminator(const char *s)
@@ -186,7 +187,7 @@ static int at_line_terminator(const char *s)
 
 static int at_id_terminator(const char *s)
 {
-	return strchr(spaces, *s) || at_line_terminator(s);
+	return strchr(spaces_lf, *s) || at_line_terminator(s);
 }
 
 static int is_absolute(const char *path)
@@ -262,10 +263,10 @@ static void split_args(char *str, const struct dict_element *dict, char **known,
 static void args_to_mount_opts(char *args)
 {
 	char *o = args;
-	args += strspn(args, spaces);
+	args += strspn(args, spaces_lf);
 	while (*args) {
-		if (strchr(spaces, *args)) {
-			args += strspn(args, spaces);
+		if (strchr(spaces_lf, *args)) {
+			args += strspn(args, spaces_lf);
 			*o++ = ',';
 			continue;
 		}
