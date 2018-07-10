@@ -177,6 +177,7 @@ static struct stk *pop(struct stk **head)
 #define swap(a, b) do { typeof(a) _t = b; b = a; a = _t; } while (0)
 
 static char spaces[] = "\x20\t\r";
+static char spaces_lf[] = "\x20\t\r\n";
 static char empty_str[] = "";
 
 static int at_line_terminator(const char *s)
@@ -186,7 +187,7 @@ static int at_line_terminator(const char *s)
 
 static int at_id_terminator(const char *s)
 {
-	return strchr(spaces, *s) || at_line_terminator(s);
+	return strchr(spaces_lf, *s) || at_line_terminator(s);
 }
 
 static int is_absolute(const char *path)
@@ -252,68 +253,110 @@ static const struct dict_element generic_mount_opts[] = {
 	{ NULL }
 };
 
-int finddict(const struct dict_element *dict, char *word, int *num, int *len)
+static inline int is_delimiter(const char *s)
 {
-	int i;
-	for (i = 0; dict[i].key; ++i) {
-		if (strcmp(dict[i].key, word) == 0) {
-			*num = i;
-			*len = strlen(dict[i].key);
+	return *s && strchr(spaces_lf, *s);
+}
+
+static inline void swap_char(char *a, char *b)
+{
+	char t = *b;
+	*b = *a;
+	*a = t;
+}
+
+static inline void reverse(char *s, char *e)
+{
+	if (e - s < 2)
+		return;
+	while (s < --e)
+		swap_char(e, s++);
+}
+
+static int in_dictionary(const struct dict_element *dictionary, const char *word, int len)
+{
+	if (!len)
+		return 0;
+	while (dictionary->key) {
+		if (strncmp(dictionary->key, word, len) == 0)
 			return 1;
-		}
+		++dictionary;
 	}
-	*num = -1;
-	*len = strlen(word);
 	return 0;
 }
 
-static void split_args(char *str, const struct dict_element *dict, char **known, char **others)
+static void split_args(char *buffer, const struct dict_element *dictionary, char **k, char **u)
 {
-	static const char delim[] = "\x20\t\r\n";
-	const char service_delim = '\x7f';
-	int init_string_len = strlen(str);
-	int i = 0;
-	char *saveptr;
-	int dict_pos = 0;
-	char *tokistr;
+	char *buffer_end = buffer + strlen(buffer);
+	char *b = buffer;
+	char *e = buffer_end;
 
-	tokistr = saveptr = str;
-	while (tokistr) {
-		int tokistr_len = 0;
-		tokistr = strtok_r(saveptr, delim, &saveptr);
-		if (!tokistr)
-			break;
-		if (finddict(dict, tokistr, &dict_pos, &tokistr_len)) {
-			memmove(str + i + tokistr_len + 1, str + i, tokistr - i - str);
-			memmove(str + i, dict[dict_pos].key, tokistr_len);
-			str[i + tokistr_len] = service_delim;
-			i += tokistr_len + 1;
+	*k = e;
+	*u = e;
+	while (b < e) {
+		/* select a word */
+		char *ab = b, *ae, *ne;
+		for (ae = ab; ae < e && !is_delimiter(ae);)
+			++ae;
+		/* find the trailing delimiters */
+		for (ne = ae; ne < e && is_delimiter(ne);)
+			++ne;
+		if (ab == ae) { /* empty word (string starting with delimiters) */
+			b = ne;
 			continue;
 		}
-		if (saveptr < str + init_string_len)
-			tokistr[tokistr_len] = service_delim;
-		else {
-			str[init_string_len] = '\0';
-			break;
+		if (in_dictionary(dictionary, ab, ae - ab)) {
+			/* known word, leave it and its delimiters in place */
+			b = ne;
+			continue;
 		}
+		/* move the word to the end of buffer */
+		int len = ne - ab;
+		reverse(ab, e);
+		reverse(e - len + (ne - ae), e);
+		reverse(ab, e - len);
+		b = ab;
+		e -= len;
 	}
-
-	int l = strlen(str);
-	if (str[i])
-		str[i++] = '\0';
-	*others = str + i;
-	for (i = 0; i < l; i++)
-		if (str[i] == service_delim)
-			str[i] = delim[0];
+	if (e > buffer)
+		*k = buffer;
+	/* finalize: terminate the known words and reverse the others */
+	if (e != buffer_end)
+		while (e > buffer) {
+			if (is_delimiter(e)) {
+				*e++ = '\0';
+				break;
+			}
+			--e;
+		}
+	*u = e;
+	/*
+	 * Note: can finish here if the order of unknown words is not
+	 * important.
+	 */
+	b = e;
+	reverse(b, buffer_end);
+	while (b < buffer_end) {
+		char *ab = b;
+		while (ab < buffer_end && is_delimiter(ab))
+			++ab;
+		if (ab == buffer_end)
+			break;
+		char *ae = ab;
+		while (ae < buffer_end && !is_delimiter(ae))
+			++ae;
+		reverse(ab, ae);
+		b = ae;
+	}
 }
 
-static void args_to_mount_opts(char *args)
+static void args_to_mount_data(char *args)
 {
 	char *o = args;
-	args += strspn(args, spaces);
+	args += strspn(args, spaces_lf);
 	while (*args) {
-		if (strchr(spaces, *args)) {
-			args += strspn(args, spaces);
+		if (strchr(spaces_lf, *args)) {
+			args += strspn(args, spaces_lf);
 			*o++ = ',';
 			continue;
 		}
@@ -562,9 +605,10 @@ static int do_config_union(struct stk **head, char *arg)
 		      "and at least one from\n");
 	} else {
 		char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
+		arg = cleanup(arg);
 		split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
 		if (*ovl_opts)
-			args_to_mount_opts(ovl_opts);
+			args_to_mount_data(ovl_opts);
 		else
 			ovl_opts = union_opts;
 		data = malloc(strlen(ovl_opts) + 1 + sizeof("lowerdir") + lowersize);
@@ -623,9 +667,10 @@ static int do_config_overlay(struct stk **head, char *arg)
 		      "and one 'to' path lines\n");
 	} else {
 		char *data, *mnt_opts = empty_str, *ovl_opts = empty_str;
+		arg = cleanup(arg);
 		split_args(arg, generic_mount_opts, &mnt_opts, &ovl_opts);
 		if (*ovl_opts)
-			args_to_mount_opts(ovl_opts);
+			args_to_mount_data(ovl_opts);
 		else
 			ovl_opts = overlay_opts;
 		data = malloc(strlen(ovl_opts) +
