@@ -759,7 +759,9 @@ static int run_container(const char *cd_to, const char *prog, char **argv)
 	return 2;
 }
 
-static int run_pidns_container(const char *cd_to, const char *prog, char **argv)
+#define PIDNS_OWN_PROC 1
+
+static int run_pidns_container(const char *cd_to, unsigned flags, const char *prog, char **argv)
 {
 	if (unshare(CLONE_NEWPID) != 0) {
 		error("unshare(CLONE_NEWPID): %s\n", strerror(errno));
@@ -773,7 +775,7 @@ static int run_pidns_container(const char *cd_to, const char *prog, char **argv)
 	case 0:
 		if (verbose)
 			fprintf(stderr, "%s: %s: pid %ld\n", build_container, prog, (long)getpid());
-		if (pidns > 1 && mount("proc", "/proc", "proc", 0, NULL) != 0) {
+		if ((flags & PIDNS_OWN_PROC) && mount("proc", "/proc", "proc", 0, NULL) != 0) {
 			error("mount(proc): %s\n", strerror(errno));
 			exit(2);
 		}
@@ -961,7 +963,9 @@ int main(int argc, char *argv[])
 		fputc('\n', stderr);
 	}
 	if (pidns)
-		return run_pidns_container(cd_to, prog, argv + optind - 1);
+		return run_pidns_container(cd_to,
+					   pidns > 1 ? PIDNS_OWN_PROC : 0,
+					   prog, argv + optind - 1);
 	return run_container(cd_to, prog, argv + optind - 1);
 }
 
