@@ -490,6 +490,10 @@ static FILE *open_config(const char *config, char **config_dir)
 	char *dirs;
 	char *p;
 
+	if (strcmp(config, "-") == 0) {
+		*config_dir = get_current_dir_name();
+		return stdin;
+	}
 	if (is_absolute(config))
 		return open_config_file(config, config_dir);
 	dirs = getenv(BUILD_CONTAINER_PATH);
@@ -734,7 +738,8 @@ static int do_config(const char *config)
 		if (ret)
 			break;
 	}
-	fclose(fp);
+	if (fp != stdin)
+		fclose(fp);
 	free(config_dir);
 	while (head) {
 		struct stk *a = head->next;
@@ -846,6 +851,7 @@ static void usage(int code)
 		"-n <container> read configuration from $"BUILD_CONTAINER_PATH" if set, or from\n"
 		"               "CONTAINER_PATH"/container\n"
 		"               (instead of just unsharing namespaces).\n"
+		"               Can be \"-\" to read the configuration from stdin.\n"
 		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
 		"-c             check configuration only, don't run anything.\n"
 		"-L             lock file system inside the container from all\n"
