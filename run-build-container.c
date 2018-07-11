@@ -490,6 +490,10 @@ static FILE *open_config(const char *config, char **config_dir)
 	char *dirs;
 	char *p;
 
+	if (strcmp(config, "-") == 0) {
+		*config_dir = get_current_dir_name();
+		return stdin;
+	}
 	if (is_absolute(config))
 		return open_config_file(config, config_dir);
 	dirs = getenv(BUILD_CONTAINER_PATH);
@@ -734,7 +738,8 @@ static int do_config(const char *config)
 		if (ret)
 			break;
 	}
-	fclose(fp);
+	if (fp != stdin)
+		fclose(fp);
 	free(config_dir);
 	while (head) {
 		struct stk *a = head->next;
@@ -759,7 +764,9 @@ static int run_container(const char *cd_to, const char *prog, char **argv)
 	return 2;
 }
 
-static int run_pidns_container(const char *cd_to, const char *prog, char **argv)
+#define PIDNS_OWN_PROC 1
+
+static int run_pidns_container(const char *cd_to, unsigned flags, const char *prog, char **argv)
 {
 	if (unshare(CLONE_NEWPID) != 0) {
 		error("unshare(CLONE_NEWPID): %s\n", strerror(errno));
@@ -773,7 +780,7 @@ static int run_pidns_container(const char *cd_to, const char *prog, char **argv)
 	case 0:
 		if (verbose)
 			fprintf(stderr, "%s: %s: pid %ld\n", build_container, prog, (long)getpid());
-		if (pidns > 1 && mount("proc", "/proc", "proc", 0, NULL) != 0) {
+		if ((flags & PIDNS_OWN_PROC) && mount("proc", "/proc", "proc", 0, NULL) != 0) {
 			error("mount(proc): %s\n", strerror(errno));
 			exit(2);
 		}
@@ -844,6 +851,7 @@ static void usage(int code)
 		"-n <container> read configuration from $"BUILD_CONTAINER_PATH" if set, or from\n"
 		"               "CONTAINER_PATH"/container\n"
 		"               (instead of just unsharing namespaces).\n"
+		"               Can be \"-\" to read the configuration from stdin.\n"
 		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
 		"-c             check configuration only, don't run anything.\n"
 		"-L             lock file system inside the container from all\n"
@@ -961,7 +969,9 @@ int main(int argc, char *argv[])
 		fputc('\n', stderr);
 	}
 	if (pidns)
-		return run_pidns_container(cd_to, prog, argv + optind - 1);
+		return run_pidns_container(cd_to,
+					   pidns > 1 ? PIDNS_OWN_PROC : 0,
+					   prog, argv + optind - 1);
 	return run_container(cd_to, prog, argv + optind - 1);
 }
 
