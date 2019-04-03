@@ -12,6 +12,7 @@
 #include <grp.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
+#include <sys/utsname.h>
 #include <linux/if.h>
 #include <linux/sockios.h>
 #include <getopt.h>
@@ -31,6 +32,8 @@ static int pidns;
 static int netns;
 static char default_overlay_opts[] = "index=off,xino=off,";
 static char default_union_opts[] = "xino=off,";
+static char v4_15_overlay_opts[] = "index=off,";
+static char v4_15_union_opts[] = "";
 static char *overlay_opts = default_overlay_opts;
 static char *union_opts = default_union_opts;
 
@@ -842,6 +845,25 @@ static int setup_netns(void)
 	return 0;
 }
 
+static void setup_default_overlay_opts(void)
+{
+	static char none[] = "";
+	int a, b;
+	struct utsname uts;
+
+	uname(&uts);
+	if (strcmp(uts.sysname, "Linux") != 0) {
+		overlay_opts = none;
+		union_opts = none;
+		return;
+	}
+	if (sscanf(uts.release, "%d.%d", &a, &b) == 2 &&
+	    (a < 4 || (a == 4 && b <= 15))) {
+		overlay_opts = v4_15_overlay_opts;
+		union_opts = v4_15_union_opts;
+	}
+}
+
 static void usage(int code)
 {
 	fprintf(stderr, "%s [-hqcLP] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
@@ -924,6 +946,7 @@ int main(int argc, char *argv[])
 		static char opt[] = "-l";
 		argv[--optind] = opt;
 	}
+	setup_default_overlay_opts();
 	/* collect privileges of the unmodified process environment */
 	if (collect_privileges())
 		exit(2);
