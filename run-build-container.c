@@ -16,6 +16,7 @@
 #include <sys/utsname.h>
 #include <linux/if.h>
 #include <linux/sockios.h>
+#include <linux/loop.h>
 #include <getopt.h>
 
 #ifndef BUILD_CONTAINER_PATH
@@ -245,8 +246,10 @@ static char *cleanup(char *s)
 struct dict_element
 {
 	const char *key;
-	unsigned long flags;
+	unsigned long flags, extra;
 };
+
+#define MS_EXTRA_LOOP (1lu << 0)
 
 static const struct dict_element generic_mount_opts[] = {
 	{ "rec", MS_REC },
@@ -255,6 +258,7 @@ static const struct dict_element generic_mount_opts[] = {
 	{ "nodev", MS_NODEV },
 	{ "ro", MS_RDONLY },
 	{ "rw", 0 },
+	{ "loop", 0, MS_EXTRA_LOOP },
 	{ NULL }
 };
 
@@ -394,7 +398,7 @@ static const char *abspath(const char *dir, const char *name)
 	return abspath_buf;
 }
 
-static int do_mount_options(unsigned long *opts, char *arg)
+static int do_mount_options(unsigned long *opts, unsigned long *extra, char *arg)
 {
 	arg = cleanup(arg);
 	while (!at_line_terminator(arg)) {
@@ -405,6 +409,7 @@ static int do_mount_options(unsigned long *opts, char *arg)
 		for (i = 0; generic_mount_opts[i].key; ++i)
 			if (expect_id(generic_mount_opts[i].key, &arg)) {
 				*opts |= generic_mount_opts[i].flags;
+				*extra |= generic_mount_opts[i].extra;
 				break;
 			}
 		if (!generic_mount_opts[i].key) {
@@ -415,29 +420,98 @@ static int do_mount_options(unsigned long *opts, char *arg)
 	return 0;
 }
 
-static int do_mount(const char *src, char *tgt, const char *fstype,
+static int losetup(const char *src, char **bdev)
+{
+	int fd, nr;
+
+	*bdev = NULL;
+	fd = open("/dev/loop-control", O_RDWR | O_CLOEXEC);
+	if (fd < 0) {
+		error("loop-control: %s\n", strerror(errno));
+		return -1;
+	}
+	nr = ioctl(fd, LOOP_CTL_GET_FREE);
+	if (nr < 0)
+		error("loop-control: get free: %s\n", strerror(errno));
+	close(fd);
+	if (nr < 0)
+		return -1;
+	*bdev = malloc(32);
+	sprintf(*bdev, "/dev/loop%d", nr);
+	fd = open(*bdev, O_RDWR | O_CLOEXEC);
+	if (fd < 0) {
+		error("%s: %s\n", *bdev, strerror(errno));
+		return -1;
+	}
+	nr = open(src, O_RDWR | O_CLOEXEC);
+	if (fd < 0) {
+		error("%s: %s\n", src, strerror(errno));
+		close(fd);
+		return -1;
+	}
+	if (ioctl(fd, LOOP_SET_FD, nr) < 0) {
+		error("%s: attach: %s\n", src, strerror(errno));
+		close(nr);
+		close(fd);
+		return -1;
+	}
+	close(nr);
+	close(fd);
+	return 0;
+}
+
+static void locleanup(char **bdev)
+{
+	int fd;
+
+	fd = open(*bdev, O_RDWR | O_CLOEXEC);
+	if (fd < 0) {
+		error("%s: %s\n", *bdev, strerror(errno));
+		return;
+	}
+	if (ioctl(fd, LOOP_CLR_FD) < 0)
+		error("%s: detach: %s\n", *bdev, strerror(errno));
+	close(fd);
+	free(*bdev);
+	*bdev = NULL;
+}
+
+static int do_mount(const char *src_, char *tgt, const char *fstype,
 		    unsigned long flags, const void *data,
 		    char *args)
 {
+	int ret = 0;
+	char *src;
 	unsigned long opts = 0;
+	unsigned long extra = 0;
 
 	// FIXME validate if the src and tgt are accessible by the target user
-	if (do_mount_options(&opts, args) != 0)
+	if (do_mount_options(&opts, &extra, args) != 0)
 		return -1;
 	if (check_config) {
-		printf("# mount '%s' '%s' %s 0x%lx%s '%s'\n",
-		       src, tgt, fstype, flags | opts,
+		printf("# mount '%s' '%s' %s 0x%lx%s 0x%lx '%s'\n",
+		       src_, tgt, fstype, flags | opts,
 		       flags & MS_BIND ? " bind" :
 		       flags & MS_MOVE ? " move" : "",
+		       extra,
 		       (const char *)data);
 		return 0;
 	}
+	if (extra & MS_EXTRA_LOOP) {
+		if (losetup(src_, &src) == -1) {
+			if (src)
+				goto clean;
+			goto done;
+		}
+	} else
+		src = strdup(src_);
 	if (mount(src, tgt, fstype, flags | (opts & MS_REC ? MS_REC : 0), data) != 0) {
 		error("%smount(%s, %s): %s\n",
 		      flags & MS_BIND ? "bind " :
 		      flags & MS_MOVE ? "move " : "",
 		      src, tgt, strerror(errno));
-		return -1;
+		ret = -1;
+		goto clean;
 	}
 	if (opts & ~(unsigned long)MS_REC) {
 		if (mount(src, tgt, fstype, MS_REMOUNT | flags | opts, data) != 0) {
@@ -445,10 +519,16 @@ static int do_mount(const char *src, char *tgt, const char *fstype,
 			      flags & MS_BIND ? "bind " :
 			      flags & MS_MOVE ? "move " : "",
 			      src, tgt, opts, strerror(errno));
-			return -1;
+			ret = -1;
+			goto clean;
 		}
 	}
-	return 0;
+clean:
+	if (extra & MS_EXTRA_LOOP)
+		locleanup(&src);
+done:
+	free(src);
+	return ret;
 }
 
 static int do_chroot(const char *root)
