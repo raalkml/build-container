@@ -803,6 +803,8 @@ static int run_container(const char *cd_to, const char *prog, char **argv)
 		error("chdir(%s): %s\n", cd_to, strerror(errno));
 		return 3;
 	}
+	if (verbose)
+		fprintf(stderr, "%s: %s: pid %ld\n", build_container, prog, (long)getpid());
 	execvp(prog, argv);
 	error("execvp(%s): %s\n", prog, strerror(errno));
 	return 2;
