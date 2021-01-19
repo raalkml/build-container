@@ -1,6 +1,6 @@
 #!/bin/sh
 
-mkdir -p t/mnt1 t/mnt2 t/mnt3
+mkdir -p t/mnt1 t/mnt2 t/mnt3 t/mnt6
 mkdir -p t/mnt4/mnt t/mnt4/top t/mnt4/bottom t/mnt4/wrk t/mnt5/mnt t/mnt5/top t/mnt5/bottom t/mnt5/wrk
 mkdir -p t/union-top t/union-bottom
 echo TOP >t/union-top/file
