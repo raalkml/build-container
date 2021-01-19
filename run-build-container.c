@@ -415,7 +415,7 @@ static int do_mount_options(unsigned long *opts, char *arg)
 	return 0;
 }
 
-static int do_mount(char *src, char *tgt, const char *fstype,
+static int do_mount(const char *src, char *tgt, const char *fstype,
 		    unsigned long flags, const void *data,
 		    char *args)
 {
@@ -546,6 +546,43 @@ static FILE *open_config(const char *config, char **config_dir)
 	}
 	free(dirs);
 	return fp;
+}
+
+static int do_config_mount(struct stk **head, char *arg)
+{
+	int ret;
+	const char *from;
+	struct stk *b = pop(head);
+	struct stk *a = pop(head);
+
+	if (a && b && b->arg != TO)
+		swap(a, b);
+	from = a ? a->val : "none";
+	if (b && b->arg == TO) {
+		const char *fstype = NULL;
+		arg = cleanup(arg);
+		fstype = arg;
+		if (at_id_terminator(fstype))
+			fstype = NULL;
+		else {
+			while (!at_id_terminator(arg))
+				++arg;
+			if (*arg)
+				*arg++ = '\0';
+		}
+		if (fstype)
+			ret = do_mount(from, b->val, fstype, 0, NULL, arg);
+		else {
+			error("'mount' expects a file system type\n");
+			ret = -1;
+		}
+	} else {
+		error("'mount' expects a 'to' and, optionally, a 'from'\n");
+		ret = -1;
+	}
+	free(a);
+	free(b);
+	return ret;
 }
 
 static int do_config_bind(struct stk **head, char *arg)
@@ -730,6 +767,8 @@ static int do_config(const char *config)
 			push(&head, TO, abspath(config_dir, cleanup(arg)));
 		else if (expect_id("work", &arg))
 			push(&head, WORK, abspath(config_dir, cleanup(arg)));
+		else if (expect_id("mount", &arg))
+			ret = do_config_mount(&head, arg);
 		else if (expect_id("bind", &arg))
 			ret = do_config_bind(&head, arg);
 		else if (expect_id("move", &arg))
