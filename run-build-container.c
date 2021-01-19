@@ -942,6 +942,13 @@ static void setup_default_overlay_opts(void)
 static void usage(int code)
 {
 	fprintf(stderr, "%s [-hqcLP] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
+		"\n"
+		"Run the program <prog> in a new mount namespace to isolate software build\n"
+		"processes or testing environments.\n"
+		"It can setup the target environment on file system level: bind, move, union\n"
+		" and overlay mounts, as well as normal mounts. Also supported are chroot,\n"
+		"network, pid and user namespaces.\n"
+		"\n"
 		"-h             show this text\n"
 		"-q             disable printing of program and config file names\n"
 		"-v             increase verbosity\n"
