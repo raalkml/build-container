@@ -1,10 +1,10 @@
 # build-container
 
-A container implementation for software builds on Linux systems.
+A simplified implementation of containers for software builds and testing on Linux systems.
 
 Unshares the filesystem and networking namespaces and allows a chroot, bind, move, r/w overlay and r/o union.
 
-Requires root set uid or sudo/su (CAP_SYSADMIN).
+Can setup a user namespace for root-less operation or use a SUID root or sudo/su (to get `CAP_SYSADMIN`).
 
 See man-pages for `mount(1)`, `mount(2)`, `unshare(2)`, `namespaces(7)` for operational details.
 
@@ -50,4 +50,14 @@ overlay xino=auto index=off ro
 
 # chroot(2)
 chroot t/merged
+
+# A tmpfs mount, with options
+to t/runtime
+mount tmpfs rw
+
+# A loopback device mount
+from artifacts.squashfs
+to t
+mount squashfs loop ro
+
 ```

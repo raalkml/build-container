@@ -36,3 +36,13 @@ overlay xino=auto index=off ro
 
 # chroot(2)
 # chroot t/mnt4
+
+# A tmpfs mount, with options
+to t/mnt6
+mount tmpfs ro rec
+
+# A loopback mount
+from example.squashfs
+to t/mnt7
+mount squashfs loop ro
+
