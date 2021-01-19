@@ -10,6 +10,7 @@
 #include <wait.h>
 #include <pwd.h>
 #include <grp.h>
+#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
@@ -29,7 +30,7 @@ static int check_config;
 static int verbose = 1;
 static int chrooted;
 static int pidns;
-static int netns;
+static int netns, userns;
 static char default_overlay_opts[] = "index=off,xino=off,";
 static char default_union_opts[] = "xino=off,";
 static char v4_15_overlay_opts[] = "index=off,";
@@ -53,8 +54,8 @@ struct privileges
 		 has_gid:1;
 	int ngroups;
 	gid_t *groups;
-	uid_t uid;
-	gid_t gid;
+	uid_t uid, euid;
+	gid_t gid, egid;
 	const char *user;
 	const char *home;
 };
@@ -103,10 +104,11 @@ static int collect_sudo_privileges(const char *sudo_user)
 
 static int collect_privileges(void)
 {
-	uid_t ruid, euid, suid;
+	uid_t ruid, suid;
 
-	getresuid(&ruid, &euid, &suid);
-	if (ruid == euid) {
+	getresuid(&ruid, &privileges.euid, &suid);
+	privileges.egid = getegid();
+	if (ruid == privileges.euid) {
 		char *sudo_user = getenv("SUDO_USER");
 		if (sudo_user)
 			return collect_sudo_privileges(sudo_user);
@@ -822,6 +824,38 @@ static int run_pidns_container(const char *cd_to, unsigned flags, const char *pr
 	return 2;
 }
 
+static ssize_t write_file(const char *file, const char *line, int n)
+{
+	ssize_t ret;
+	int fd = open(file, O_WRONLY);
+	if (fd < 0) {
+		error("open(%s): %s\n", file, strerror(errno));
+		ret = -1;
+	} else {
+		ret = write(fd, line, n);
+		if (ret == -1)
+			error("write(%s): %s\n", file, strerror(errno));
+		close(fd);
+	}
+	return ret;
+}
+
+static int setup_userns(void)
+{
+	uid_t uid;
+	gid_t gid;
+	char str[80];
+	int n;
+	write_file("/proc/self/setgroups", "deny", 4);
+	uid = privileges.has_uid ? privileges.uid : privileges.euid;
+	gid = privileges.has_gid ? privileges.gid : privileges.egid;
+	n = snprintf(str, sizeof(str), "%lu %lu 1", (unsigned long)gid, (unsigned long)gid);
+	write_file("/proc/self/gid_map", str, n);
+	n = snprintf(str, sizeof(str), "%lu %lu 1", (unsigned long)uid, (unsigned long)uid);
+	write_file("/proc/self/uid_map", str, n);
+	return 0;
+}
+
 static int setup_netns(void)
 {
 	struct ifreq ifr;
@@ -886,6 +920,10 @@ static void usage(int code)
 		"-N             unshare the network namespace to allow, for instance, multiple\n"
 		"               services on the same local TCP or UNIX ports or remove network\n"
 		"               access from the build container (loopback interface will be set up)\n"
+		"-U             unshare the user namespace for root-less build containers.\n"
+		"               This is forced on if the program is started with non-root EUID.\n"
+		"               The option can be given when running as root to setup a new\n"
+		"               user namespace anyway.\n"
 		"\n",
 		build_container);
 	exit(code);
@@ -898,7 +936,7 @@ int main(int argc, char *argv[])
 	const char *cd_to = NULL;
 	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cLlqd:PNv")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLlqd:PNUv")) != -1)
 		switch (opt) {
 		case 'h':
 			usage(0);
@@ -935,6 +973,11 @@ int main(int argc, char *argv[])
 			if (netns > 1)
 				usage(1);
 			break;
+		case 'U':
+			++userns;
+			if (userns > 1)
+				usage(1);
+			break;
 		default:
 			usage(1);
 		}
@@ -965,7 +1008,11 @@ int main(int argc, char *argv[])
 		fputc('\n', stdout);
 		exit(0);
 	}
-	if (unshare(CLONE_NEWNS | (netns ? CLONE_NEWNET : 0)) == 0) {
+	if (privileges.euid)
+		userns = 1;
+	if (unshare(CLONE_NEWNS | (userns ? CLONE_NEWUSER : 0) | (netns ? CLONE_NEWNET : 0)) == 0) {
+		if (userns && setup_userns() != 0)
+			exit(2);
 		if (mount("none", "/", NULL,
 			  MS_REC | (lock_fs ? MS_PRIVATE : MS_SLAVE), NULL) != 0) {
 			error("setting mount propagation: %s\n", strerror(errno));
