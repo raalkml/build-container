@@ -826,7 +826,8 @@ static int run_pidns_container(const char *cd_to, unsigned flags, const char *pr
 	case 0:
 		if (verbose)
 			fprintf(stderr, "%s: %s: pid %ld\n", build_container, prog, (long)getpid());
-		if ((flags & PIDNS_OWN_PROC) && mount("proc", "/proc", "proc", 0, NULL) != 0) {
+		if ((flags & PIDNS_OWN_PROC) &&
+		    mount("proc", "/proc", "proc", MS_NOSUID|MS_NODEV|MS_NOEXEC, NULL) != 0) {
 			error("mount(proc): %s\n", strerror(errno));
 			exit(2);
 		}
