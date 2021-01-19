@@ -42,7 +42,7 @@ to t/mnt6
 mount tmpfs ro rec
 
 # A loopback mount
-from example.squashfs
-to t/mnt7
-mount squashfs loop ro
+#from example.squashfs
+#to t/mnt7
+#mount squashfs loop ro
 
