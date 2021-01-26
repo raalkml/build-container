@@ -46,3 +46,7 @@ mount tmpfs ro rec
 #to t/mnt7
 #mount squashfs loop ro
 
+# A tmpfs mount, with options, create t/mnt8
+to! t/mnt8
+mount tmpfs ro rec
+

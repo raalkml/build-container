@@ -11,6 +11,7 @@
 #include <pwd.h>
 #include <grp.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
@@ -820,6 +821,43 @@ static int do_config_overlay(struct stk **head, char *arg)
 	return ret;
 }
 
+int mkdir_p(const char *path, mode_t mode)
+{
+	int ret = mkdir(path, mode);
+
+	if (ret == -1 && ENOENT == errno) {
+		char *dir = strdup(path);
+		char *end = strend(dir);
+		char *slash = dir;
+
+		while (slash < end) {
+			char *s = strchr(slash, '/');
+			if (!s)
+				s = strend(slash);
+			if (s > slash) {
+				*s = '\0';
+				ret = mkdir(dir, mode);
+				*s = '/';
+				if (ret == -1 && EEXIST != errno)
+					break;
+			}
+			slash = s + !!*s;
+		}
+		free(dir);
+	}
+	return ret;
+}
+
+int mkdir_may_exist(const char *pathname)
+{
+	int ret = mkdir_p(pathname, 0755);
+	if (ret == -1 && EEXIST == errno)
+		ret = 0;
+	else if (ret)
+		error("mkdir %s: %s\n", pathname, strerror(errno));
+	return ret;
+}
+
 static int do_config(const char *config)
 {
 	char line[BUFSIZ];
@@ -843,10 +881,28 @@ static int do_config(const char *config)
 		 */
 		if (expect_id("from", &arg))
 			push(&head, FROM, abspath(config_dir, cleanup(arg)));
+		else if (expect_id("from!", &arg)) {
+			const char *path = abspath(config_dir, cleanup(arg));
+			ret = mkdir_may_exist(path);
+			if (ret == 0)
+				push(&head, FROM, path);
+		}
 		else if (expect_id("to", &arg))
 			push(&head, TO, abspath(config_dir, cleanup(arg)));
+		else if (expect_id("to!", &arg)) {
+			const char *path = abspath(config_dir, cleanup(arg));
+			ret = mkdir_may_exist(path);
+			if (ret == 0)
+				push(&head, TO, path);
+		}
 		else if (expect_id("work", &arg))
 			push(&head, WORK, abspath(config_dir, cleanup(arg)));
+		else if (expect_id("work!", &arg)) {
+			const char *path = abspath(config_dir, cleanup(arg));
+			ret = mkdir_may_exist(path);
+			if (ret == 0)
+				push(&head, WORK, path);
+		}
 		else if (expect_id("mount", &arg))
 			ret = do_config_mount(&head, arg);
 		else if (expect_id("bind", &arg))
