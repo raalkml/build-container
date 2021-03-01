@@ -1100,6 +1100,7 @@ static void usage(int code)
 		"-l             passed verbatim to the <prog>\n"
 		"               (usually makes shell to act as if started as a login shell)\n"
 		"-d <dir>       change current directory to <dir> before executing <prog>\n"
+		"-w <dir>       same as -d <dir>, for docker-run compatibility\n"
 		"-P             unshare the pid namespace to avoid run-away build processes.\n"
 		"               Given twice, will also mount a new /proc in the container\n"
 		"-N             unshare the network namespace to allow, for instance, multiple\n"
@@ -1121,7 +1122,7 @@ int main(int argc, char *argv[])
 	const char *cd_to = NULL;
 	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cLlqd:PNUv")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLlqd:w:PNUv")) != -1)
 		switch (opt) {
 		case 'h':
 			usage(0);
@@ -1130,6 +1131,7 @@ int main(int argc, char *argv[])
 			config = optarg;
 			break;
 		case 'd':
+		case 'w':
 			cd_to = optarg;
 			break;
 		case 'e':
