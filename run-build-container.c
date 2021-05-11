@@ -39,6 +39,7 @@ static char v4_15_overlay_opts[] = "index=off,";
 static char v4_15_union_opts[] = "";
 static char *overlay_opts = default_overlay_opts;
 static char *union_opts = default_union_opts;
+static const char *PWD;
 
 static void error(const char *fmt, ...)
 {
@@ -384,7 +385,7 @@ static const char *abspath(const char *dir, const char *name)
 	if (is_absolute(name))
 		return name;
 	if (name[0] == '~' && (name[1] == '/' || !name[1])) {
-		dir = getenv("HOME");
+		dir = privileges.home;
 		++name;
 		if (*name)
 			++name;
@@ -577,7 +578,7 @@ static FILE *open_config(const char *config, char **config_dir)
 	char *p;
 
 	if (strcmp(config, "-") == 0) {
-		*config_dir = get_current_dir_name();
+		*config_dir = strdup(PWD);
 		return stdin;
 	}
 	if (is_absolute(config))
@@ -605,7 +606,7 @@ static FILE *open_config(const char *config, char **config_dir)
 			n = 1;
 		}
 		if (p[0] == '~' && (p[1] == '/' || p[1] == ':' || !p[1])) {
-			const char *home = getenv("HOME");
+			const char *home = privileges.home;
 			if (!home)
 				home = dot + 1;
 			file = malloc(strlen(home) + n + strlen(config) + 2);
@@ -1176,6 +1177,8 @@ int main(int argc, char *argv[])
 	}
 	setup_default_overlay_opts();
 	/* collect privileges of the unmodified process environment */
+	PWD = get_current_dir_name();
+	privileges.home = getenv("HOME");
 	if (collect_privileges())
 		exit(2);
 	if (check_config) {
@@ -1184,7 +1187,7 @@ int main(int argc, char *argv[])
 		if (config && do_config(config) != 0)
 			exit(3);
 		if (chrooted && !cd_to)
-			cd_to = get_current_dir_name();
+			cd_to = PWD;
 		if (cd_to)
 			printf("# cd '%s'\n", cd_to);
 		printf("# starting '%s'", prog);
@@ -1213,7 +1216,7 @@ int main(int argc, char *argv[])
 	if (config && do_config(config) != 0)
 		exit(3);
 	if (chrooted && !cd_to)
-		cd_to = get_current_dir_name();
+		cd_to = PWD;
 	argv[optind - 1] = (char *)prog;
 	if (verbose) {
 		int i;
