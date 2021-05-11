@@ -826,7 +826,9 @@ int mkdir_p(const char *path, mode_t mode)
 {
 	int ret = mkdir(path, mode);
 
-	if (ret == -1 && ENOENT == errno) {
+	if (ret == 0 || EEXIST == errno)
+		return 0;
+	if (ENOENT == errno) {
 		char *dir = strdup(path);
 		char *end = strend(dir);
 		char *slash = dir;
