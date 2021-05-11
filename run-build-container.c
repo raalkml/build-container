@@ -1126,6 +1126,9 @@ int main(int argc, char *argv[])
 	const char *cd_to = NULL;
 	int opt, lock_fs = 0, login = 0;
 
+	privileges.home = getenv("HOME");
+	PWD = get_current_dir_name();
+
 	while ((opt = getopt(argc, argv, "hn:e:cLlqd:PNUvE:")) != -1)
 		switch (opt) {
 			char *p;
@@ -1194,8 +1197,6 @@ int main(int argc, char *argv[])
 	}
 	setup_default_overlay_opts();
 	/* collect privileges of the unmodified process environment */
-	PWD = get_current_dir_name();
-	privileges.home = getenv("HOME");
 	if (collect_privileges())
 		exit(2);
 	if (check_config) {
