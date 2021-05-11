@@ -997,7 +997,7 @@ static int run_pidns_container(const char *cd_to, unsigned flags, const char *pr
 		}
 		else if (WIFSIGNALED(status)) {
 			error("%s: %s\n", prog, strsignal(WTERMSIG(status)));
-			return 128 + WSTOPSIG(status);
+			return 128 + WTERMSIG(status);
 		}
 		error("failed(%s)\n", prog);
 		return 127;
