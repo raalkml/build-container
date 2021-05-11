@@ -1081,7 +1081,7 @@ static void setup_default_overlay_opts(void)
 
 static void usage(int code)
 {
-	fprintf(stderr, "%s [-hqcLP] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
+	fprintf(stderr, "%s [-hqcLP] [-E NAME[=VALUE]] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
 		"\n"
 		"Run the program <prog> in a new mount namespace to isolate software build\n"
 		"processes or testing environments.\n"
