@@ -40,6 +40,7 @@ static char v4_15_union_opts[] = "";
 static char *overlay_opts = default_overlay_opts;
 static char *union_opts = default_union_opts;
 static const char *PWD;
+static const char SLASH[] = "/";
 
 static void error(const char *fmt, ...)
 {
@@ -395,7 +396,7 @@ static const char *abspath(const char *dir, const char *name)
 		abspath_buf = realloc(abspath_buf, size = newsize);
 	strcpy(abspath_buf, dir);
 	if (*strlast(abspath_buf) != '/')
-		strcat(abspath_buf, "/");
+		strcat(abspath_buf, SLASH);
 	strcat(abspath_buf, name);
 	return abspath_buf;
 }
@@ -618,7 +619,7 @@ static FILE *open_config(const char *config, char **config_dir)
 			memcpy(file, p, n);
 			file[n] = '\0';
 		}
-		strcat(file, "/");
+		strcat(file, SLASH);
 		strcat(file, config);
 		fp = open_config_file(file, config_dir);
 		free(file);
@@ -1222,7 +1223,7 @@ int main(int argc, char *argv[])
 	if (unshare(CLONE_NEWNS | (userns ? CLONE_NEWUSER : 0) | (netns ? CLONE_NEWNET : 0)) == 0) {
 		if (userns && setup_userns() != 0)
 			exit(2);
-		if (mount("none", "/", NULL,
+		if (mount("none", SLASH, NULL,
 			  MS_REC | (lock_fs ? MS_PRIVATE : MS_SLAVE), NULL) != 0) {
 			error("setting mount propagation: %s\n", strerror(errno));
 			exit(2);
