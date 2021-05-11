@@ -1181,8 +1181,11 @@ int main(int argc, char *argv[])
 		default:
 			usage(1);
 		}
-	if (!prog)
+	if (!prog) {
+		if (verbose > 1)
+			error("No program given, falling back to shell\n");
 		prog = getenv("SHELL");
+	}
 	if (!prog)
 		prog = "/bin/sh";
 	if (login) {
@@ -1210,8 +1213,11 @@ int main(int argc, char *argv[])
 		fputc('\n', stdout);
 		exit(0);
 	}
-	if (privileges.euid)
+	if (privileges.euid) {
+		if (verbose > 1 && !userns)
+			error("unprivileged execution, setting up user namespace\n");
 		userns = 1;
+	}
 	if (unshare(CLONE_NEWNS | (userns ? CLONE_NEWUSER : 0) | (netns ? CLONE_NEWNET : 0)) == 0) {
 		if (userns && setup_userns() != 0)
 			exit(2);
