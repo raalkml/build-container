@@ -1112,6 +1112,8 @@ static void usage(int code)
 		"               This is forced on if the program is started with non-root EUID.\n"
 		"               The option can be given when running as root to setup a new\n"
 		"               user namespace anyway.\n"
+		"-E NAME[=VALUE] set the environment variable NAME to the VALUE,\n"
+		"               or unset the variable NAME if no VALUE given.\n"
 		"\n",
 		build_container);
 	exit(code);
@@ -1124,8 +1126,9 @@ int main(int argc, char *argv[])
 	const char *cd_to = NULL;
 	int opt, lock_fs = 0, login = 0;
 
-	while ((opt = getopt(argc, argv, "hn:e:cLlqd:PNUv")) != -1)
+	while ((opt = getopt(argc, argv, "hn:e:cLlqd:PNUvE:")) != -1)
 		switch (opt) {
+			char *p;
 		case 'h':
 			usage(0);
 			break;
@@ -1137,6 +1140,15 @@ int main(int argc, char *argv[])
 			break;
 		case 'e':
 			prog = optarg;
+			break;
+		case 'E':
+			p = strchr(optarg, '=');
+			if (!p)
+				unsetenv(optarg);
+			else {
+				*p = '\0';
+				setenv(optarg, p + 1, 1);
+			}
 			break;
 		case 'c':
 			check_config = 1;
