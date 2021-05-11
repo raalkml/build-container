@@ -1086,7 +1086,7 @@ static void usage(int code)
 		"Run the program <prog> in a new mount namespace to isolate software build\n"
 		"processes or testing environments.\n"
 		"It can setup the target environment on file system level: bind, move, union\n"
-		" and overlay mounts, as well as normal mounts. Also supported are chroot,\n"
+		"and overlay mounts, as well as normal mounts. Also supported are chroot,\n"
 		"network, pid and user namespaces.\n"
 		"\n"
 		"-h             show this text\n"
