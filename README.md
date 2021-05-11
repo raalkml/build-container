@@ -4,7 +4,7 @@ A simplified implementation of containers for software builds and testing on Lin
 
 Unshares the filesystem and networking namespaces and allows a chroot, bind, move, r/w overlay and r/o union.
 
-Can setup a user namespace for root-less operation or use a SUID root or sudo/su (to get `CAP_SYSADMIN`).
+Can setup a user namespace for root-less operation (as [RootlessKit](https://github.com/rootless-containers/rootlesskit)) or use a SUID root or sudo/su (to get `CAP_SYSADMIN`).
 
 See man-pages for `mount(1)`, `mount(2)`, `unshare(2)`, `namespaces(7)` for operational details.
 
