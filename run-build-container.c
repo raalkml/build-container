@@ -823,7 +823,7 @@ static int do_config_overlay(struct stk **head, char *arg)
 	return ret;
 }
 
-int mkdir_p(const char *path, mode_t mode)
+static int mkdir_p(const char *path, mode_t mode)
 {
 	int ret = mkdir(path, mode);
 
@@ -852,7 +852,7 @@ int mkdir_p(const char *path, mode_t mode)
 	return ret;
 }
 
-int mkdir_may_exist(const char *pathname)
+static int mkdir_may_exist(const char *pathname)
 {
 	int ret = mkdir_p(pathname, 0755);
 	if (ret == -1 && EEXIST == errno)
