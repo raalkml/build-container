@@ -447,7 +447,7 @@ static int losetup(const char *src, char **bdev)
 		return -1;
 	}
 	nr = open(src, O_RDWR | O_CLOEXEC);
-	if (fd < 0) {
+	if (nr < 0) {
 		error("%s: %s\n", src, strerror(errno));
 		close(fd);
 		return -1;
