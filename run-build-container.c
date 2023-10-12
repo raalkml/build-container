@@ -1090,27 +1090,30 @@ static void usage(int code)
 		"and overlay mounts, as well as normal mounts. Also supported are chroot,\n"
 		"network, pid and user namespaces.\n"
 		"\n"
-		"-h             show this text\n"
+		"-h, --help     show this text\n"
 		"-q             disable printing of program and config file names\n"
 		"-v             increase verbosity\n"
-		"-n <container> read configuration from $"BUILD_CONTAINER_PATH" if set, or from\n"
-		"               "CONTAINER_PATH"/container\n"
+		"-n <container>, --config=<container>\n"
+		"               read configuration from a file relative to $"BUILD_CONTAINER_PATH" if set,\n"
+		"               or from "CONTAINER_PATH"/container\n"
 		"               (instead of just unsharing namespaces).\n"
+		"               Can be an absolute path, which will be used verbatim.\n"
 		"               Can be \"-\" to read the configuration from stdin.\n"
 		"-e <prog>      run <prog> instead of ${SHELL:-/bin/sh}.\n"
-		"-c             check configuration only, don't run anything.\n"
+		"-c, --check    check configuration only, don't run anything.\n"
 		"-L             lock file system inside the container from all\n"
 		"               changes in the outside (parent) namespace, i.e. unmounts.\n"
 		"-l             passed verbatim to the <prog>\n"
 		"               (usually makes shell to act as if started as a login shell)\n"
-		"-d <dir>       change current directory to <dir> before executing <prog>\n"
+		"-d <dir>, --cd=<dir>\n"
+		"               change current directory to <dir> before executing <prog>\n"
 		"-w <dir>       same as -d <dir>, for docker-run compatibility\n"
-		"-P             unshare the pid namespace to avoid run-away build processes.\n"
+		"-P, --pid      unshare the pid namespace to avoid run-away build processes.\n"
 		"               Given twice, will also mount a new /proc in the container\n"
-		"-N             unshare the network namespace to allow, for instance, multiple\n"
+		"-N, --net      unshare the network namespace to allow, for instance, multiple\n"
 		"               services on the same local TCP or UNIX ports or remove network\n"
 		"               access from the build container (loopback interface will be set up)\n"
-		"-U             unshare the user namespace for root-less build containers.\n"
+		"-U, --user     unshare the user namespace for root-less build containers.\n"
 		"               This is forced on if the program is started with non-root EUID.\n"
 		"               The option can be given when running as root to setup a new\n"
 		"               user namespace anyway.\n"
@@ -1126,12 +1129,25 @@ int main(int argc, char *argv[])
 	const char *config = NULL;
 	const char *prog = NULL;
 	const char *cd_to = NULL;
-	int opt, lock_fs = 0, login = 0;
+	int lock_fs = 0, login = 0;
 
 	privileges.home = getenv("HOME");
 	PWD = get_current_dir_name();
 
-	while ((opt = getopt(argc, argv, "hn:e:cLlqd:w:PNUvE:")) != -1)
+	for (;;) {
+		static struct option options[] = {
+			{ "help", no_argument, NULL, 'h' },
+			{ "check", no_argument, NULL, 'c' },
+			{ "config", required_argument, NULL, 'n' },
+			{ "cd", required_argument, NULL, 'd' },
+			{ "pid", no_argument, NULL, 'P' },
+			{ "net", no_argument, NULL, 'N' },
+			{ "user", no_argument, NULL, 'U' },
+			{ 0 }
+		};
+		int idx, opt = getopt_long(argc, argv, "hn:e:cLlqd:w:PNUvE:", options, &idx);
+		if (opt == -1)
+			break;
 		switch (opt) {
 			char *p;
 		case 'h':
@@ -1187,6 +1203,7 @@ int main(int argc, char *argv[])
 		default:
 			usage(1);
 		}
+	}
 	if (!prog) {
 		if (verbose > 1)
 			error("No program given, falling back to shell\n");
