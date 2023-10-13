@@ -1083,7 +1083,7 @@ static void setup_default_overlay_opts(void)
 static void usage(int code)
 {
 	fprintf(stderr, "%s [-hqcLP] [-E NAME[=VALUE]] [-n <container>] [-d <dir>] [-e <prog>] [-- args...]\n"
-		"%s\n%s\n",
+		"%s\n%s\n", build_container,
 		"Run the program <prog> in a new mount namespace to isolate software build\n"
 		"processes or testing environments.\n"
 		"It can setup the target environment on file system level: bind, move, union\n"
@@ -1117,7 +1117,7 @@ static void usage(int code)
 		"               This is forced on if the program is started with non-root EUID.\n"
 		"               The option can be given when running as root to setup a new\n"
 		"               user namespace anyway.\n"
-		"-E NAME[=VALUE]"
+		"-E NAME[=VALUE]\n"
 		"               set the environment variable NAME to the VALUE,\n"
 		"               or unset the variable NAME if no VALUE given.\n",
 		"Container configuration file syntax\n"
@@ -1158,8 +1158,9 @@ static void usage(int code)
 		"               which results to a more natural visibility of same names:\n"
 		"               the earlier <from> are visible in case of conflict.\n"
 		"  overlay      Make a writable overlay out of two <from> paths on <to>.\n"
-		"               Also requires specification of a <work> path.\n",
-		build_container);
+		"               Also requires specification of a <work> path.\n"
+		"  chroot <path>\n"
+		"               Do a chroot(2) into the <path>.\n");
 	exit(code);
 }
 
