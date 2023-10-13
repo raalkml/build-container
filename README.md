@@ -1,10 +1,10 @@
 # build-container
 
-A simplified implementation of containers for software builds and testing on Linux systems.
+*This is not a containerization as provided by Docker, Podman, or similar!*
 
-Unshares the filesystem and networking namespaces and allows a chroot, bind, move, r/w overlay and r/o union.
+This project provides some isolation for software builds and software testing for Linux systems.
 
-Can setup a user namespace for root-less operation (as [RootlessKit](https://github.com/rootless-containers/rootlesskit)) or use a SUID root or sudo/su (to get `CAP_SYSADMIN`).
+The program allows unsharing of the filesystem and networking namespaces and allows a chroot, bind, move, r/w overlay and r/o union. It can also setup a user namespace for root-less operation (as [RootlessKit](https://github.com/rootless-containers/rootlesskit)) or use a SUID root or sudo/su (to get `CAP_SYSADMIN`).
 
 See man-pages for `mount(1)`, `mount(2)`, `unshare(2)`, `namespaces(7)` for operational details.
 
